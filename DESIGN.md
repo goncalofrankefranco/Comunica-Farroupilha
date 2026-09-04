@@ -1,5 +1,5 @@
 ---
-name: "Grêmio Comunica Farroupilha"
+name: "Comunica Farroupilha"
 description: "An open, student-facing visual system built around the original orange megaphone and school navy."
 colors:
   orange: "#ff5000"
@@ -110,7 +110,7 @@ components:
     textColor: "{colors.paper}"
 ---
 
-# Design System: Grêmio Comunica Farroupilha
+# Design System: Comunica Farroupilha
 
 ## Overview
 
