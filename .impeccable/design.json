@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-04T13:33:48.467Z",
+  "title": "Design System: Grêmio Comunica Farroupilha",
+  "extensions": {
+    "colorMeta": {
+      "orange": {
+        "role": "primary",
+        "displayName": "Megaphone orange",
+        "tonalRamp": [
+          "oklch(15.00% 0.2213 37.64)",
+          "oklch(26.43% 0.2213 37.64)",
+          "oklch(37.86% 0.2213 37.64)",
+          "oklch(49.29% 0.2213 37.64)",
+          "oklch(60.71% 0.2213 37.64)",
+          "oklch(72.14% 0.2213 37.64)",
+          "oklch(83.57% 0.2213 37.64)",
+          "oklch(95.00% 0.2213 37.64)"
+        ]
+      },
+      "orange-dark": {
+        "role": "primary",
+        "displayName": "Dark orange",
+        "tonalRamp": [
+          "oklch(15.00% 0.1684 39.52)",
+          "oklch(26.43% 0.1684 39.52)",
+          "oklch(37.86% 0.1684 39.52)",
+          "oklch(49.29% 0.1684 39.52)",
+          "oklch(60.71% 0.1684 39.52)",
+          "oklch(72.14% 0.1684 39.52)",
+          "oklch(83.57% 0.1684 39.52)",
+          "oklch(95.00% 0.1684 39.52)"
+        ]
+      },
+      "orange-hover": {
+        "role": "primary",
+        "displayName": "Action hover orange",
+        "tonalRamp": [
+          "oklch(15.00% 0.2093 37.87)",
+          "oklch(26.43% 0.2093 37.87)",
+          "oklch(37.86% 0.2093 37.87)",
+          "oklch(49.29% 0.2093 37.87)",
+          "oklch(60.71% 0.2093 37.87)",
+          "oklch(72.14% 0.2093 37.87)",
+          "oklch(83.57% 0.2093 37.87)",
+          "oklch(95.00% 0.2093 37.87)"
+        ]
+      },
+      "navy": {
+        "role": "secondary",
+        "displayName": "School navy",
+        "tonalRamp": [
+          "oklch(15.00% 0.0842 251.90)",
+          "oklch(26.43% 0.0842 251.90)",
+          "oklch(37.86% 0.0842 251.90)",
+          "oklch(49.29% 0.0842 251.90)",
+          "oklch(60.71% 0.0842 251.90)",
+          "oklch(72.14% 0.0842 251.90)",
+          "oklch(83.57% 0.0842 251.90)",
+          "oklch(95.00% 0.0842 251.90)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "White paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0000 0)",
+          "oklch(26.43% 0.0000 0)",
+          "oklch(37.86% 0.0000 0)",
+          "oklch(49.29% 0.0000 0)",
+          "oklch(60.71% 0.0000 0)",
+          "oklch(72.14% 0.0000 0)",
+          "oklch(83.57% 0.0000 0)",
+          "oklch(95.00% 0.0000 0)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Cool soft surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.0025 228.78)",
+          "oklch(26.43% 0.0025 228.78)",
+          "oklch(37.86% 0.0025 228.78)",
+          "oklch(49.29% 0.0025 228.78)",
+          "oklch(60.71% 0.0025 228.78)",
+          "oklch(72.14% 0.0025 228.78)",
+          "oklch(83.57% 0.0025 228.78)",
+          "oklch(95.00% 0.0025 228.78)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Reading ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0589 250.22)",
+          "oklch(26.43% 0.0589 250.22)",
+          "oklch(37.86% 0.0589 250.22)",
+          "oklch(49.29% 0.0589 250.22)",
+          "oklch(60.71% 0.0589 250.22)",
+          "oklch(72.14% 0.0589 250.22)",
+          "oklch(83.57% 0.0589 250.22)",
+          "oklch(95.00% 0.0589 250.22)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted blue-gray",
+        "tonalRamp": [
+          "oklch(15.00% 0.0350 247.03)",
+          "oklch(26.43% 0.0350 247.03)",
+          "oklch(37.86% 0.0350 247.03)",
+          "oklch(49.29% 0.0350 247.03)",
+          "oklch(60.71% 0.0350 247.03)",
+          "oklch(72.14% 0.0350 247.03)",
+          "oklch(83.57% 0.0350 247.03)",
+          "oklch(95.00% 0.0350 247.03)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Divider gray",
+        "tonalRamp": [
+          "oklch(15.00% 0.0147 244.73)",
+          "oklch(26.43% 0.0147 244.73)",
+          "oklch(37.86% 0.0147 244.73)",
+          "oklch(49.29% 0.0147 244.73)",
+          "oklch(60.71% 0.0147 244.73)",
+          "oklch(72.14% 0.0147 244.73)",
+          "oklch(83.57% 0.0147 244.73)",
+          "oklch(95.00% 0.0147 244.73)"
+        ]
+      },
+      "action-ink": {
+        "role": "neutral",
+        "displayName": "Deep action ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0502 248.91)",
+          "oklch(26.43% 0.0502 248.91)",
+          "oklch(37.86% 0.0502 248.91)",
+          "oklch(49.29% 0.0502 248.91)",
+          "oklch(60.71% 0.0502 248.91)",
+          "oklch(72.14% 0.0502 248.91)",
+          "oklch(83.57% 0.0502 248.91)",
+          "oklch(95.00% 0.0502 248.91)"
+        ]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control border",
+        "tonalRamp": [
+          "oklch(15.00% 0.0228 243.86)",
+          "oklch(26.43% 0.0228 243.86)",
+          "oklch(37.86% 0.0228 243.86)",
+          "oklch(49.29% 0.0228 243.86)",
+          "oklch(60.71% 0.0228 243.86)",
+          "oklch(72.14% 0.0228 243.86)",
+          "oklch(83.57% 0.0228 243.86)",
+          "oklch(95.00% 0.0228 243.86)"
+        ]
+      },
+      "control-hover": {
+        "role": "neutral",
+        "displayName": "Control hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0111 243.66)",
+          "oklch(26.43% 0.0111 243.66)",
+          "oklch(37.86% 0.0111 243.66)",
+          "oklch(49.29% 0.0111 243.66)",
+          "oklch(60.71% 0.0111 243.66)",
+          "oklch(72.14% 0.0111 243.66)",
+          "oklch(83.57% 0.0111 243.66)",
+          "oklch(95.00% 0.0111 243.66)"
+        ]
+      },
+      "light-hover": {
+        "role": "neutral",
+        "displayName": "Light action hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0126 236.63)",
+          "oklch(26.43% 0.0126 236.63)",
+          "oklch(37.86% 0.0126 236.63)",
+          "oklch(49.29% 0.0126 236.63)",
+          "oklch(60.71% 0.0126 236.63)",
+          "oklch(72.14% 0.0126 236.63)",
+          "oklch(83.57% 0.0126 236.63)",
+          "oklch(95.00% 0.0126 236.63)"
+        ]
+      },
+      "on-navy-muted": {
+        "role": "neutral",
+        "displayName": "Muted text on navy",
+        "tonalRamp": [
+          "oklch(15.00% 0.0198 245.65)",
+          "oklch(26.43% 0.0198 245.65)",
+          "oklch(37.86% 0.0198 245.65)",
+          "oklch(49.29% 0.0198 245.65)",
+          "oklch(60.71% 0.0198 245.65)",
+          "oklch(72.14% 0.0198 245.65)",
+          "oklch(83.57% 0.0198 245.65)",
+          "oklch(95.00% 0.0198 245.65)"
+        ]
+      },
+      "on-navy-accent": {
+        "role": "secondary",
+        "displayName": "Warm accent on navy",
+        "tonalRamp": [
+          "oklch(15.00% 0.1176 45.08)",
+          "oklch(26.43% 0.1176 45.08)",
+          "oklch(37.86% 0.1176 45.08)",
+          "oklch(49.29% 0.1176 45.08)",
+          "oklch(60.71% 0.1176 45.08)",
+          "oklch(72.14% 0.1176 45.08)",
+          "oklch(83.57% 0.1176 45.08)",
+          "oklch(95.00% 0.1176 45.08)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Main page headline; mobile override is documented in Layout."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings."
+      },
+      "title": {
+        "displayName": "Module title",
+        "purpose": "Open module-row titles."
+      },
+      "demo-title": {
+        "displayName": "Listening result title",
+        "purpose": "Title of the currently selected example."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Inherited reading baseline."
+      },
+      "label": {
+        "displayName": "Action label",
+        "purpose": "Filled anchor actions."
+      },
+      "navigation": {
+        "displayName": "Navigation",
+        "purpose": "Header section links."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "0.2s",
+        "purpose": "Action colors and choice backgrounds/borders; arrows use ease."
+      },
+      {
+        "name": "arrow-shift",
+        "value": "translateX(4px)",
+        "purpose": "Hover feedback on filled action arrows."
+      },
+      {
+        "name": "conversation-in",
+        "value": "0.38s cubic-bezier(.16,1,.3,1) both",
+        "purpose": "New result content: clip-path inset(0 0 12% 0) to inset(0 0 0 0), opacity 0.7 to 1."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none !important; transition: none !important; scroll-behavior: auto",
+        "purpose": "Under prefers-reduced-motion: reduce; scrolling is immediate and motion is suppressed."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop-max",
+        "value": "1050px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "700px"
+      },
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Orange action",
+      "kind": "button",
+      "refersTo": "button-orange",
+      "description": "Primary anchor action on the light canvas.",
+      "html": "<a class=\"ds-button ds-orange\" href=\"#experimente\">Conheça a proposta <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:space-between;gap:26px;min-height:54px;padding:14px 22px;border-radius:7px;font-family:var(--body,'Manrope Variable',sans-serif);font-size:14px;font-weight:750;line-height:1.65;text-decoration:none;transition:background .2s,color .2s}.ds-button:hover .ds-arrow{transform:translateX(4px)}@media(max-width:700px){.ds-button{min-height:50px;padding:13px 20px;font-size:13px}}.ds-arrow{width:24px;height:24px;flex-shrink:0;transition:transform .2s ease}.ds-orange{background:var(--orange,#ff5000);color:#061d32}.ds-orange:hover{background:#ee4b00;color:#061d32}.ds-orange:focus-visible{outline:3px solid var(--orange-dark,#b83d00);outline-offset:5px}@media(prefers-reduced-motion:reduce){.ds-arrow,.ds-button,.ds-choice{transition:none!important}}"
+    },
+    {
+      "name": "Light action",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "White anchor action used inside the navy closing band.",
+      "html": "<div class=\"ds-navy-canvas\"><a class=\"ds-button ds-light\" href=\"#experimente\">Explorar a proposta <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a></div>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:space-between;gap:26px;min-height:54px;padding:14px 22px;border-radius:7px;font-family:var(--body,'Manrope Variable',sans-serif);font-size:14px;font-weight:750;line-height:1.65;text-decoration:none;transition:background .2s,color .2s}.ds-button:hover .ds-arrow{transform:translateX(4px)}@media(max-width:700px){.ds-button{min-height:50px;padding:13px 20px;font-size:13px}}.ds-arrow{width:24px;height:24px;flex-shrink:0;transition:transform .2s ease}.ds-navy-canvas{background:var(--navy,#153d66);padding:18px}.ds-light{background:white;color:var(--navy,#153d66)}.ds-light:hover{background:#e4edf3}.ds-light:focus-visible{outline:3px solid #ffa77f;outline-offset:5px}@media(prefers-reduced-motion:reduce){.ds-arrow,.ds-button,.ds-choice{transition:none!important}}"
+    },
+    {
+      "name": "Listening choice",
+      "kind": "button",
+      "refersTo": "listening-choice",
+      "description": "Unselected local demonstration option; the app handles selection.",
+      "html": "<button class=\"ds-choice\" type=\"button\" aria-pressed=\"false\">Jogos e movimento <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></button>",
+      "css": ".ds-choice{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:67px;padding:18px 22px;border:1px solid #bac8d4;border-radius:8px;background:transparent;color:var(--navy,#153d66);font-family:var(--body,'Manrope Variable',sans-serif);font-size:15px;font-weight:650;line-height:1.65;text-align:left;cursor:pointer;transition:background .2s,border-color .2s}.ds-choice:hover{background:#e2e9ef;border-color:var(--navy,#153d66)}.ds-choice[aria-pressed=true]{background:var(--navy,#153d66);color:white;border-color:var(--navy,#153d66)}.ds-choice[aria-pressed=true] .ds-arrow{color:#ffa77f;transform:rotate(-45deg)}.ds-choice:focus-visible{position:relative;z-index:1}@media(max-width:700px){.ds-choice{min-height:54px;padding:13px 17px;font-size:14px}}.ds-arrow{width:24px;height:24px;flex-shrink:0;transition:transform .2s ease}.ds-choice:focus-visible{outline:3px solid var(--orange-dark,#b83d00);outline-offset:5px}@media(prefers-reduced-motion:reduce){.ds-arrow,.ds-button,.ds-choice{transition:none!important}}"
+    },
+    {
+      "name": "Selected listening choice",
+      "kind": "button",
+      "refersTo": "listening-choice-selected",
+      "description": "Selected state with a warm diagonal arrow and semantic pressed state.",
+      "html": "<button class=\"ds-choice\" type=\"button\" aria-pressed=\"true\">Música e encontros <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></button>",
+      "css": ".ds-choice{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:67px;padding:18px 22px;border:1px solid #bac8d4;border-radius:8px;background:transparent;color:var(--navy,#153d66);font-family:var(--body,'Manrope Variable',sans-serif);font-size:15px;font-weight:650;line-height:1.65;text-align:left;cursor:pointer;transition:background .2s,border-color .2s}.ds-choice:hover{background:#e2e9ef;border-color:var(--navy,#153d66)}.ds-choice[aria-pressed=true]{background:var(--navy,#153d66);color:white;border-color:var(--navy,#153d66)}.ds-choice[aria-pressed=true] .ds-arrow{color:#ffa77f;transform:rotate(-45deg)}.ds-choice:focus-visible{position:relative;z-index:1}@media(max-width:700px){.ds-choice{min-height:54px;padding:13px 17px;font-size:14px}}.ds-arrow{width:24px;height:24px;flex-shrink:0;transition:transform .2s ease}.ds-choice:focus-visible{outline:3px solid var(--orange-dark,#b83d00);outline-offset:5px}@media(prefers-reduced-motion:reduce){.ds-arrow,.ds-button,.ds-choice{transition:none!important}}"
+    },
+    {
+      "name": "Primary navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Inline section anchors; the exploration action remains visible on mobile.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Navegação principal\"><a href=\"#proposta\">A proposta</a><a href=\"#como-funciona\">Como vai funcionar</a><a class=\"ds-nav-cta\" href=\"#experimente\">Explore a ideia <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:30px;font-family:var(--body,'Manrope Variable',sans-serif);font-size:13px;font-weight:650;line-height:1.65;color:var(--ink,#18334e)}.ds-nav a{padding-block:12px;color:inherit;text-decoration:none;text-underline-offset:5px}.ds-nav a:hover{text-decoration:underline}.ds-nav-cta{display:flex;gap:12px;align-items:center}.ds-nav .ds-arrow{width:20px;height:20px;transform:rotate(-45deg)}.ds-nav a:focus-visible{outline:3px solid var(--orange-dark,#b83d00);outline-offset:5px}@media(max-width:1050px){.ds-nav{gap:22px}}@media(max-width:700px){.ds-nav{gap:0;font-size:11px}.ds-nav>a:not(.ds-nav-cta){display:none}.ds-nav-cta{gap:5px}.ds-nav .ds-arrow{width:17px;height:17px}}"
+    },
+    {
+      "name": "Editorial text link",
+      "kind": "button",
+      "refersTo": "text-link",
+      "description": "Underlined text action with a diagonal directional arrow.",
+      "html": "<a class=\"ds-text-link\" href=\"#experimente\">Veja como essa escuta pode acontecer <svg class=\"ds-arrow\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M4 12h15m-6-6 6 6-6 6\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></a>",
+      "css": ".ds-arrow{width:24px;height:24px;flex-shrink:0;transition:transform .2s ease}.ds-text-link{display:inline-flex;align-items:center;gap:14px;padding-bottom:7px;border-bottom:1px solid var(--navy,#153d66);font-family:var(--body,'Manrope Variable',sans-serif);font-size:13px;font-weight:750;line-height:1.65;color:var(--ink,#18334e);text-decoration:none}.ds-text-link .ds-arrow{transform:rotate(-45deg)}.ds-text-link:hover .ds-arrow{transform:rotate(-45deg) translateX(4px)}.ds-text-link:focus-visible{outline:3px solid var(--orange-dark,#b83d00);outline-offset:5px}@media(max-width:700px){.ds-text-link{font-size:12px;gap:9px}}@media(prefers-reduced-motion:reduce){.ds-arrow,.ds-button,.ds-choice{transition:none!important}}"
+    },
+    {
+      "name": "Open module row",
+      "kind": "custom",
+      "refersTo": "module-row",
+      "description": "Static three-part article with a rule; stacks at the mobile breakpoint.",
+      "html": "<article class=\"ds-module\"><h3>Escuta e propostas</h3><p>Um espaço para contar como está o recreio, sugerir mudanças e opinar sobre ideias dos alunos e do próprio GEF.</p><span>Da sua experiência a uma conversa com retorno.</span></article>",
+      "css": ".ds-module{display:grid;grid-template-columns:1fr 1.3fr .9fr;gap:45px;border-top:1px solid var(--line,#d4dde5);padding:32px 0;color:var(--ink,#18334e);font-family:var(--body,'Manrope Variable',sans-serif)}.ds-module h3{margin:0;font-family:var(--display,'Archivo Variable',sans-serif);font-size:23px;line-height:1.2;letter-spacing:-.02em;font-weight:700;text-wrap:balance}.ds-module p{margin:0;font-size:14px;color:var(--muted,#526475);line-height:1.8}.ds-module>span{font-size:13px;line-height:1.7;max-width:25ch;color:var(--navy,#153d66);font-weight:650;align-self:center}@media(max-width:1050px){.ds-module{gap:25px}}@media(max-width:700px){.ds-module{grid-template-columns:1fr;gap:12px;padding-block:27px}.ds-module h3{font-size:24px}.ds-module p{max-width:60ch}.ds-module>span{max-width:none;font-size:12px;margin-top:2px}}"
+    },
+    {
+      "name": "Development status",
+      "kind": "custom",
+      "refersTo": "development-status",
+      "description": "Static development label on navy; the dot does not animate.",
+      "html": "<div class=\"ds-status-canvas\"><span class=\"ds-status\"><span aria-hidden=\"true\"></span>Projeto em desenvolvimento</span></div>",
+      "css": ".ds-status-canvas{background:var(--navy,#153d66);padding:18px}.ds-status{display:inline-flex;gap:10px;align-items:center;font-family:var(--body,'Manrope Variable',sans-serif);font-size:12px;font-weight:650;line-height:1.65;color:#fff}.ds-status>span{width:8px;height:8px;background:#ff9868;border-radius:50%}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Student campaign poster",
+    "overview": "The original orange megaphone, school navy and white space give the interface a direct, approachable student voice. Heavy Archivo headlines establish emphasis; Manrope keeps explanations and controls clear. Open rows and broad color bands provide structure with little visual enclosure.\n\nThis is the implemented baseline extracted from the landing page on 2026-09-04, not a claim of approved visual comps. Preserve the user's original logo artwork and institutional marks. Page-specific composition lives in `.impeccable/surfaces/src-app-page-tsx.md`; this document records the reusable visual decisions.",
+    "keyCharacteristics": [
+      "Original orange megaphone and school navy on white.",
+      "Heavy, tightly spaced headlines with readable supporting text.",
+      "Flat surfaces, open rows and restrained rounded controls.",
+      "Short interaction feedback with an explicit reduced-motion path."
+    ],
+    "rules": [
+      {
+        "name": "The Contrast Pairing Rule",
+        "body": "Keep dark action ink on the bright orange button. Use dark orange for orange text on white; the logo's bright orange is not the text-emphasis color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "Continue the existing tonal and border separation before introducing elevation to an established component.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** preserve the original user-provided logo artwork and the institutional marks.",
+      "**Do** pair Archivo headings with Manrope reading text and controls.",
+      "**Do** use flat surfaces, tonal bands and thin rules as the default separation.",
+      "**Do** preserve keyboard focus, semantic selection state and reduced-motion behavior.",
+      "**Do** describe future participation and the local demonstration truthfully in approachable Brazilian Portuguese."
+    ],
+    "donts": [
+      "**Don't** replace dark action ink with white text on the bright orange action.",
+      "**Don't** recolor the original logo to match a text token.",
+      "**Don't** treat the static development dot as a live activity signal.",
+      "**Don't** add participation statistics, endorsements or live events without evidence.",
+      "**Don't** infer missing form, error, loading or disabled patterns from this landing's documentation."
+    ]
+  }
+}
