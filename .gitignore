@@ -32,3 +32,5 @@ tmp/
 .github/skills/
 .github/hooks/impeccable.json
 README.txt
+.vercel
+.data/
