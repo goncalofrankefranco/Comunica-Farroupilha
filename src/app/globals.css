@@ -154,3 +154,98 @@ h1 span{color:var(--orange-dark)}
 @media(max-width:800px){.calendar-month-actions{gap:4px}.calendar-nav{width:24px;height:24px}.calendar-month-actions .calendar-legend{display:none}.context-proposal{margin-top:17px;padding:14px 11px}.context-proposal-head h3{font-size:17px}.context-proposal-head p{font-size:11px}.context-proposal-meta{gap:8px}.context-proposal-meta .support-button{width:100%;margin-left:0;justify-content:center}.context-proposal-actions{display:block}.context-proposal-actions button{margin-top:9px}}
 .save-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--app-orange);font:inherit;cursor:pointer}.save-button:hover,.save-button.is-saved{background:#fff4ef}.save-label{font-size:10px;font-weight:800}.context-proposal-meta .save-button{min-height:35px;padding:7px 10px;border:1px solid #f1c4ae;font-size:10px;font-weight:850}.saved-page .content-heading{margin-bottom:18px}.saved-empty{gap:0;padding:26px 18px}.saved-empty p{margin-bottom:14px}.saved-empty .primary-button{margin-top:10px}
 @media(max-width:800px){.proposal-card-main .save-button{display:inline-flex;width:auto;height:35px;margin-left:0;padding-inline:8px}.proposal-card-main .save-label{display:inline}.context-proposal-meta .save-button{width:100%;margin-left:0}}
+
+/* Novas funcionalidades: Feedback pós-recreio, Resposta oficial do GEF e Dúvidas de Chapas */
+.gef-origin-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;background:#fff0e6;color:var(--app-orange);font-size:10px;font-weight:850}
+.archive-btn{color:#78889b!important}
+.activity-badges{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.activity-status-badge{display:inline-flex;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:850;text-transform:uppercase}
+.activity-status-badge.upcoming{background:#eaf3fc;color:var(--app-blue)}
+.activity-status-badge.done{background:#e8f7ee;color:#20805e}
+.activity-status-badge.cancelled{background:#fbeee9;color:#b24222}
+.activity-feedback-count{display:inline-flex;align-items:center;gap:4px;color:#d99a18;font-size:11px;font-weight:800}
+.activity-actions{display:flex;align-items:center;gap:9px;margin-left:auto}
+.feedback-button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:7px 12px;border:1px solid #d8e5ef;border-radius:7px;background:#fff;color:var(--app-navy);font-size:11px;font-weight:800}
+.feedback-button:hover{border-color:var(--app-orange);color:var(--app-orange);background:#fff9f6}
+.feedback-button.has-feedback{border-color:#b4dbbe;background:#f3fbf5;color:#1e7552}
+.gef-summary-btn{border-color:#f2cca8;background:#fffbf8;color:var(--app-orange)}
+.gef-summary-btn:hover{background:var(--app-orange);color:#fff}
+.activity-card.is-done{border-left:4px solid #20805e}
+.activity-card.is-cancelled{border-left:4px solid #b24222;opacity:.78}
+
+/* Modais de Avaliação e Resumo */
+.feedback-modal-overlay{position:fixed;z-index:90;inset:0;display:grid;place-items:center;padding:18px;background:rgba(15,35,60,.48);backdrop-filter:blur(3px)}
+.feedback-modal-card{width:min(100%,560px);max-height:90vh;overflow-y:auto;padding:26px;border-radius:12px;background:#fff;box-shadow:0 18px 45px rgba(15,35,60,.22)}
+.feedback-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid #e2edf6}
+.feedback-modal-head h3{margin-top:4px;color:var(--app-blue);font-size:20px}
+.feedback-modal-head p{color:#687b92;font-size:12px}
+.feedback-question{margin-bottom:18px}
+.question-title{display:block;margin-bottom:8px;color:var(--app-navy);font-size:12px;font-weight:800}
+.participated-toggle{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.participated-toggle button{padding:10px;border:1px solid #cadbe8;border-radius:8px;background:#f7fafd;color:#546881;font-size:12px;font-weight:750}
+.participated-toggle button.active{border-color:var(--app-blue);background:var(--app-blue);color:#fff}
+.rating-selector{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.rating-selector button{padding:10px 12px;border:1px solid #cadbe8;border-radius:8px;background:#fff;color:var(--app-navy);font-size:12px;font-weight:750;text-align:left}
+.rating-selector button:hover{background:#f2f7fc}
+.rating-selector button.active{border-color:var(--app-orange);background:#fff5ef;color:var(--app-orange);font-weight:850}
+.feedback-modal-card select{display:block;width:100%;height:42px;padding:0 10px;border:1px solid #cadbe8;border-radius:8px;background:#fff;color:var(--app-navy);font-size:12px}
+.feedback-modal-card textarea{display:block;width:100%;padding:10px 12px;border:1px solid #cadbe8;border-radius:8px;background:#fff;color:var(--app-navy);font-size:12px;resize:vertical}
+
+/* Resumo do GEF */
+.summary-card{width:min(100%,680px)}
+.activity-status-manager{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:19px;padding:12px 14px;border-radius:8px;background:#f6f9fc}
+.activity-status-manager span{font-size:12px;font-weight:800;color:var(--app-navy)}
+.status-button-group{display:flex;gap:7px}
+.status-button-group button{padding:7px 12px;border:1px solid #c9d8e4;border-radius:6px;background:#fff;color:#52677f;font-size:11px;font-weight:800}
+.status-button-group button.active{background:var(--app-blue);color:#fff;border-color:var(--app-blue)}
+.summary-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:19px}
+.stat-box{padding:14px;border:1px solid #e1ebf4;border-radius:9px;background:#fbfdff;text-align:center}
+.stat-box strong{display:block;color:var(--app-blue);font-family:var(--display);font-size:24px}
+.stat-box span{color:#6c7e94;font-size:10px}
+.summary-reasons-block,.summary-comments-block{margin-top:16px;padding-top:14px;border-top:1px solid #e6edf3}
+.summary-reasons-block h4,.summary-comments-block h4{margin-bottom:9px;color:var(--app-navy);font-size:12px;font-weight:800}
+.summary-reasons-block ul{margin:0;padding-left:17px;color:#50647c;font-size:11px;line-height:1.7}
+.comments-scroll{display:flex;flex-direction:column;gap:9px;max-height:200px;overflow-y:auto;padding-right:4px}
+.feedback-comment-item{padding:10px 12px;border:1px solid #e5edf4;border-radius:8px;background:#f9fbfe}
+.f-comment-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.f-comment-head strong{color:var(--app-navy);font-size:11px}
+.f-comment-head small{color:#7f90a2;font-size:10px}
+.f-rating-tag{margin-left:auto;padding:2px 6px;border-radius:4px;background:#fff3ec;color:var(--app-orange);font-size:10px;font-weight:800}
+.feedback-comment-item p{margin:0;color:#455970;font-size:11px;line-height:1.5}
+
+/* Resposta oficial do GEF na Proposta */
+.gef-response-manager{margin-top:12px;padding-top:10px;border-top:1px solid #ecd6cb}
+.response-editor textarea{width:100%;padding:8px 10px;border:1px solid #f1c3ad;border-radius:7px;background:#fff;font-size:11px}
+.editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:7px}
+.edit-response-btn{width:100%;justify-content:center}
+
+/* Dúvidas sobre propostas das chapas */
+.chapa-proposal-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.chapa-q-count{color:#76889d;font-size:10px;font-weight:750;display:inline-flex;align-items:center;gap:4px}
+.chapa-proposal-actions{margin-top:12px;padding-top:9px;border-top:1px solid #e8f0f6}
+.chapa-action-btn{font-size:11px;font-weight:800;color:var(--app-blue);padding:0}
+.chapa-doubts-panel{margin-top:13px;padding:13px;border-radius:8px;background:#f7fafe;border:1px solid #dbe6f2}
+.chapa-doubts-panel h4{margin-bottom:10px;color:var(--app-blue);font-size:12px}
+.doubts-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.doubt-item{padding:10px;border-radius:7px;background:#fff;border:1px solid #e1e9f1}
+.doubt-author strong{color:var(--app-navy);font-size:11px}
+.doubt-author small{color:#7b8d9f;font-size:10px}
+.doubt-text{margin:4px 0 0;color:#495d75;font-size:11px;line-height:1.5}
+.doubt-answer{margin-top:8px;padding:8px 10px;border-radius:6px;background:#fef7f2;border-left:3px solid var(--app-orange)}
+.doubt-answer p{margin:2px 0 0;color:#604c43;font-size:11px}
+.doubt-answer small{display:block;margin-top:3px;color:#9b8074;font-size:9px}
+.doubt-waiting{margin-top:6px;color:#93a3b4;font-size:10px;font-style:italic}
+.doubt-reply-form{margin-top:8px}
+.reply-btn{font-size:10px;padding:5px 9px;min-height:auto}
+.reply-box textarea{width:100%;padding:6px 8px;border:1px solid #cadbe8;border-radius:6px;font-size:11px}
+.reply-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:5px}
+.reply-actions button{padding:6px 10px;font-size:10px;min-height:auto}
+.ask-box textarea{width:100%;padding:8px 10px;border:1px solid #cadbe8;border-radius:7px;background:#fff;font-size:11px}
+.ask-submit{margin-top:6px;width:100%}
+
+@media(max-width:800px){
+  .activity-actions{width:100%;margin-left:0;margin-top:9px;justify-content:space-between}
+  .feedback-button{flex:1;justify-content:center}
+  .summary-stats-grid{grid-template-columns:1fr}
+  .rating-selector{grid-template-columns:1fr}
+}

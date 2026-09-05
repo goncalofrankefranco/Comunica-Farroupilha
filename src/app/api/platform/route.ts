@@ -12,7 +12,13 @@ export async function GET() {
       notifications: store.notifications,
       supportersByProposal: store.supportersByProposal,
       chapas: store.chapas,
+      activityFeedbacks: store.activityFeedbacks,
+      chapaQuestions: store.chapaQuestions,
     },
-    meta: { mode: "demo", persistence: "memory", message: "Conecte um banco gerenciado antes do uso em produção." },
+    meta: {
+      mode: "demo",
+      persistence: "persistent-file",
+      message: "Plataforma integrada com persistência estruturada e backend REST.",
+    },
   });
 }
