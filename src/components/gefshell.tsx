@@ -1218,15 +1218,15 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
         <h1>{mode === "login" ? "Que bom ter você por aqui." : "Faça parte da conversa."}</h1>
         <p>{mode === "login" ? "Entre para acompanhar as propostas e ajudar a construir o próximo recreio." : "Crie uma conta para propor, apoiar e avaliar atividades."}</p>
         <div className="auth-tabs">
-          <button className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setError(""); }}>Entrar</button>
-          <button className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); setError(""); }}>Criar conta</button>
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setError(""); }}>Entrar</button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); setError(""); }}>Criar conta</button>
         </div>
         <form onSubmit={submit}>
           <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
           {mode === "signup" && <label>Turma<input value={turma} onChange={(event) => setTurma(event.target.value)} placeholder="Ex.: 8º ano A ou 2º EM" autoComplete="organization" required /></label>}
           <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres (adm: admteste123)" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} required /></label>
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="primary-button auth-submit" disabled={busy}>
+          <button type="submit" className="primary-button auth-submit" disabled={busy}>
             {busy ? "Aguarde…" : mode === "login" ? "Entrar na plataforma" : "Criar minha conta"}
             <Icon name="arrow" size={16} />
           </button>
