@@ -6,4 +6,4 @@
 | Task 4: Avaliação de Atividades Pós-Recreio na Interface | done | Modal e fluxo de feedback para estudantes e resumo estatístico para o GEF |
 | Task 5: Canal de Dúvidas sobre Propostas das Chapas | done | Formulário de dúvidas por área temática e respostas do GEF/Chapas |
 | Task 6: Testes Automatizados e Verificação Rigorosa | done | typecheck, lint, build e suite de testes com Node test runner aprovados |
-| Task 7: Push para o GitHub e Verificação | in_progress | Staging, commit e git push para branch feature/plataforma-completa no remoto pessoal |
+| Task 7: Push para o GitHub e Verificação | done | Push concluído com sucesso para branch feature/plataforma-completa no remoto pessoal |
