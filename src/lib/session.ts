@@ -61,7 +61,8 @@ if (!globalForSessions.__comunicaSessions) {
 const sessions = globalForSessions.__comunicaSessions as Map<string, string>;
 
 export async function startSession(user: PlatformUser) {
-  const token = randomUUID();
+  const tokenPayload = Buffer.from(JSON.stringify({ id: user.id, name: user.name, turma: user.turma, role: user.role })).toString("base64url");
+  const token = `${randomUUID()}.${tokenPayload}`;
   sessions.set(token, user.id);
   saveSessionsToDisk(sessions);
   const cookieStore = await cookies();
@@ -75,7 +76,7 @@ export async function startSession(user: PlatformUser) {
   return token;
 }
 
-export async function getSessionUser() {
+export async function getSessionUser(): Promise<PlatformUser | undefined> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return undefined;
   let userId = sessions.get(token);
@@ -84,7 +85,34 @@ export async function getSessionUser() {
     userId = reloaded.get(token);
     if (userId) sessions.set(token, userId);
   }
-  return userId ? getPlatformStore().accounts.find((account) => account.id === userId) : undefined;
+  const store = getPlatformStore();
+  if (userId) {
+    const found = store.accounts.find((account) => account.id === userId);
+    if (found) return found;
+  }
+
+  // Fallback: extract user metadata from self-contained token
+  const parts = token.split(".");
+  if (parts.length >= 2 && parts[1]) {
+    try {
+      const decoded = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8")) as PlatformUser;
+      if (decoded && decoded.id && decoded.name) {
+        const existing = store.accounts.find((account) => account.id === decoded.id || account.name.toLowerCase() === decoded.name.toLowerCase());
+        if (!existing) {
+          store.accounts.push({
+            id: decoded.id,
+            name: decoded.name,
+            turma: decoded.turma || "Turma não informada",
+            role: decoded.role || "student",
+            password: "",
+          });
+        }
+        return decoded;
+      }
+    } catch {}
+  }
+
+  return undefined;
 }
 
 export async function endSession() {

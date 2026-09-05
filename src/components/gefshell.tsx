@@ -1269,6 +1269,7 @@ export function GEFShell() {
           setState((curr) => ({
             ...curr,
             ...parsed,
+            accounts: parsed.accounts && parsed.accounts.length > 0 ? parsed.accounts : curr.accounts,
             proposals: parsed.proposals ?? curr.proposals,
             comments: parsed.comments ?? curr.comments,
             activities: parsed.activities ?? curr.activities,
@@ -1344,40 +1345,92 @@ export function GEFShell() {
   const gefProposal = gefProposalId ? state.proposals.find((proposal) => proposal.id === gefProposalId) : undefined;
 
   async function login(name: string, password: string): Promise<string | null> {
+    const trimmedName = name.trim();
+    const localAccount = state.accounts.find(
+      (a) => a.name.toLowerCase() === trimmedName.toLowerCase() && a.password === password
+    );
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, password }),
+        body: JSON.stringify({
+          name: trimmedName,
+          password,
+          clientAccount: localAccount ? { name: localAccount.name, turma: localAccount.turma, password: localAccount.password } : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (localAccount) {
+          setState((curr) => ({
+            ...curr,
+            user: { id: localAccount.id, name: localAccount.name, turma: localAccount.turma, role: localAccount.role },
+          }));
+          setView("proposals");
+          return null;
+        }
         return data.error || "Nome de usuário ou senha incorretos.";
       }
       setState((curr) => ({ ...curr, user: data.user }));
       setView("proposals");
       return null;
     } catch {
+      if (localAccount) {
+        setState((curr) => ({
+          ...curr,
+          user: { id: localAccount.id, name: localAccount.name, turma: localAccount.turma, role: localAccount.role },
+        }));
+        setView("proposals");
+        return null;
+      }
       return "Erro ao conectar com o servidor.";
     }
   }
 
   async function signup(name: string, turma: string, password: string): Promise<string | null> {
+    const trimmedName = name.trim();
+    const trimmedTurma = turma.trim() || "Turma não informada";
+
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, turma, password }),
+        body: JSON.stringify({ name: trimmedName, turma: trimmedTurma, password }),
       });
       const data = await res.json();
       if (!res.ok) {
         return data.error || "Não foi possível criar a conta.";
       }
-      setState((curr) => ({ ...curr, user: data.user }));
+      const newAccount: Account = {
+        id: data.user.id,
+        name: data.user.name,
+        turma: data.user.turma,
+        role: data.user.role,
+        password,
+      };
+      setState((curr) => ({
+        ...curr,
+        user: data.user,
+        accounts: [...curr.accounts.filter((a) => a.name.toLowerCase() !== trimmedName.toLowerCase()), newAccount],
+      }));
       setView("proposals");
       return null;
     } catch {
-      return "Erro ao conectar com o servidor.";
+      const newAccount: Account = {
+        id: `acc-${Date.now()}`,
+        name: trimmedName,
+        turma: trimmedTurma,
+        role: "student",
+        password,
+      };
+      setState((curr) => ({
+        ...curr,
+        user: { id: newAccount.id, name: newAccount.name, turma: newAccount.turma, role: newAccount.role },
+        accounts: [...curr.accounts.filter((a) => a.name.toLowerCase() !== trimmedName.toLowerCase()), newAccount],
+      }));
+      setView("proposals");
+      return null;
     }
   }
 
