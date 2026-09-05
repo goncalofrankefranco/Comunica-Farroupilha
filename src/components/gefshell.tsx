@@ -518,8 +518,8 @@ function ProposalCard({
           <span className={`support-button ${supported ? "is-supported" : ""}`} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onSupport(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSupport(); } }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
           </span>
-          <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
-            <Icon name="bookmark" size={18} />{saved ? <span className="save-label">Acompanhando</span> : null}
+          <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
+            <Icon name="bookmark" size={18} />
           </button>
         </div>
       </button>
