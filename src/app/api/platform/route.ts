@@ -11,6 +11,8 @@ export async function GET() {
       activities: store.activities,
       notifications: store.notifications,
       supportersByProposal: store.supportersByProposal,
+      supportedByUser: store.supportedByUser,
+      savedByUser: store.savedByUser,
       chapas: store.chapas,
       activityFeedbacks: store.activityFeedbacks,
       chapaQuestions: store.chapaQuestions,

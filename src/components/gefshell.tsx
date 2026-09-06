@@ -112,8 +112,8 @@ type DemoState = {
   comments: ProposalComment[];
   activities: Activity[];
   notifications: Notification[];
-  supportedIds: string[];
-  savedIds: string[];
+  supportedByUser: Record<string, string[]>;
+  savedByUser: Record<string, string[]>;
   supporters: Record<string, Supporter[]>;
   activityFeedbacks: Record<string, ActivityFeedback[]>;
   chapaQuestions: ChapaQuestion[];
@@ -237,8 +237,12 @@ const defaultState: DemoState = {
     { id: "n2", title: "Uma proposta recebeu resposta", body: "O GEF comentou a proposta de pontos de recarga USB.", createdAt: "Ontem", read: false },
     { id: "n3", title: "A proposta está em análise", body: "A proposta de pontos de recarga avançou de etapa.", createdAt: "Há 2 dias", read: false },
   ],
-  supportedIds: [],
-  savedIds: [],
+  supportedByUser: {
+    demo: ["p1", "p3"],
+  },
+  savedByUser: {
+    demo: ["p2"],
+  },
   supporters: {
     p1: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "livia", name: "Lívia", turma: "9º ano" }],
     p2: [{ id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "rafael", name: "Rafael Mendes", turma: "2º EM" }, { id: "nina", name: "Nina", turma: "7º ano" }],
@@ -1274,6 +1278,8 @@ export function GEFShell() {
             comments: parsed.comments ?? curr.comments,
             activities: parsed.activities ?? curr.activities,
             supporters: parsed.supporters ?? curr.supporters,
+            supportedByUser: parsed.supportedByUser ?? curr.supportedByUser,
+            savedByUser: parsed.savedByUser ?? curr.savedByUser,
             activityFeedbacks: parsed.activityFeedbacks ?? curr.activityFeedbacks,
             chapaQuestions: parsed.chapaQuestions ?? curr.chapaQuestions,
           }));
@@ -1303,6 +1309,8 @@ export function GEFShell() {
               activities: p.activities ?? curr.activities,
               notifications: p.notifications ?? curr.notifications,
               supporters: p.supportersByProposal ?? curr.supporters,
+              supportedByUser: p.supportedByUser ?? curr.supportedByUser,
+              savedByUser: p.savedByUser ?? curr.savedByUser,
               activityFeedbacks: p.activityFeedbacks ?? curr.activityFeedbacks,
               chapaQuestions: p.chapaQuestions ?? curr.chapaQuestions,
             }));
@@ -1338,8 +1346,25 @@ export function GEFShell() {
       .sort((a, b) => sort === "supports" ? b.supports - a.supports : state.proposals.indexOf(a) - state.proposals.indexOf(b));
   }, [state.proposals, query, themeFilter, statusFilter, sort]);
 
+  const userSupportedIds = useMemo(() => {
+    if (!user) return [];
+    const direct = state.supportedByUser?.[user.id] ?? [];
+    const fromSupporters = Object.entries(state.supporters)
+      .filter(([, list]) => list?.some((s) => s.id === user.id))
+      .map(([propId]) => propId);
+    return Array.from(new Set([...direct, ...fromSupporters]));
+  }, [user, state.supportedByUser, state.supporters]);
+
+  const userSavedIds = useMemo(() => {
+    if (!user) return [];
+    return state.savedByUser?.[user.id] ?? [];
+  }, [user, state.savedByUser]);
+
   const selected = state.proposals.find((proposal) => proposal.id === selectedId) ?? filteredProposals[0] ?? state.proposals[0];
-  const savedProposals = useMemo(() => state.proposals.filter((proposal) => state.savedIds.includes(proposal.id)), [state.proposals, state.savedIds]);
+  const savedProposals = useMemo(() => {
+    if (!user) return [];
+    return state.proposals.filter((proposal) => userSavedIds.includes(proposal.id));
+  }, [user, state.proposals, userSavedIds]);
   const agendaActivities = useMemo(() => state.activities.filter((activity) => activity.date.slice(0, 7) === agendaMonthKey), [state.activities, agendaMonthKey]);
   const agendaProposal = agendaProposalId ? state.proposals.find((proposal) => proposal.id === agendaProposalId) : undefined;
   const gefProposal = gefProposalId ? state.proposals.find((proposal) => proposal.id === gefProposalId) : undefined;
@@ -1454,17 +1479,26 @@ export function GEFShell() {
     try {
       const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
       const data = await res.json();
-      const supported = data.data ? data.data.supported : !state.supportedIds.includes(id);
+      const currentSupported = userSupportedIds.includes(id);
+      const supported = data.data ? data.data.supported : !currentSupported;
       const totalSupports = data.data ? data.data.supports : undefined;
       setState((curr) => {
-        const already = curr.supportedIds.includes(id);
+        const userSupports = curr.supportedByUser?.[user.id] ?? [];
+        const nextUserSupports = supported
+          ? (userSupports.includes(id) ? userSupports : [...userSupports, id])
+          : userSupports.filter((item) => item !== id);
+
         const currentSupporters = curr.supporters[id] ?? [];
         const nextSupporters = supported
           ? (currentSupporters.some((s) => s.id === user.id) ? currentSupporters : [...currentSupporters, { id: user.id, name: user.name, turma: user.turma }])
           : currentSupporters.filter((s) => s.id !== user.id);
+
         return {
           ...curr,
-          supportedIds: supported ? (already ? curr.supportedIds : [...curr.supportedIds, id]) : curr.supportedIds.filter((item) => item !== id),
+          supportedByUser: {
+            ...curr.supportedByUser,
+            [user.id]: nextUserSupports,
+          },
           supporters: { ...curr.supporters, [id]: nextSupporters },
           proposals: curr.proposals.map((p) => p.id === id ? { ...p, supports: totalSupports !== undefined ? totalSupports : Math.max(0, p.supports + (supported ? 1 : -1)) } : p),
         };
@@ -1479,11 +1513,22 @@ export function GEFShell() {
     try {
       const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
       const data = await res.json();
-      const saved = data.data ? data.data.saved : !state.savedIds.includes(id);
-      setState((curr) => ({
-        ...curr,
-        savedIds: saved ? (curr.savedIds.includes(id) ? curr.savedIds : [...curr.savedIds, id]) : curr.savedIds.filter((item) => item !== id),
-      }));
+      const currentSaved = userSavedIds.includes(id);
+      const saved = data.data ? data.data.saved : !currentSaved;
+      setState((curr) => {
+        const userSaved = curr.savedByUser?.[user.id] ?? [];
+        const nextUserSaved = saved
+          ? (userSaved.includes(id) ? userSaved : [...userSaved, id])
+          : userSaved.filter((item) => item !== id);
+
+        return {
+          ...curr,
+          savedByUser: {
+            ...curr.savedByUser,
+            [user.id]: nextUserSaved,
+          },
+        };
+      });
     } catch (err) {
       console.error(err);
     }
@@ -1922,8 +1967,8 @@ export function GEFShell() {
                     <ProposalCard
                       proposal={proposal}
                       selected={selected?.id === proposal.id}
-                      supported={state.supportedIds.includes(proposal.id)}
-                      saved={state.savedIds.includes(proposal.id)}
+                      supported={userSupportedIds.includes(proposal.id)}
+                      saved={userSavedIds.includes(proposal.id)}
                       isGef={isGef}
                       onSelect={() => setSelectedId(proposal.id)}
                       onSupport={() => toggleSupport(proposal.id)}
@@ -1979,8 +2024,8 @@ export function GEFShell() {
                       <ProposalCard
                         proposal={proposal}
                         selected={selected?.id === proposal.id}
-                        supported={state.supportedIds.includes(proposal.id)}
-                        saved
+                        supported={userSupportedIds.includes(proposal.id)}
+                        saved={userSavedIds.includes(proposal.id)}
                         isGef={isGef}
                         onSelect={() => setSelectedId(proposal.id)}
                         onSupport={() => toggleSupport(proposal.id)}
@@ -2106,8 +2151,8 @@ export function GEFShell() {
                   supporters={state.supporters[agendaProposal.id] ?? []}
                   user={user}
                   isGef={isGef}
-                  supported={state.supportedIds.includes(agendaProposal.id)}
-                  saved={state.savedIds.includes(agendaProposal.id)}
+                  supported={userSupportedIds.includes(agendaProposal.id)}
+                  saved={userSavedIds.includes(agendaProposal.id)}
                   onSupport={() => toggleSupport(agendaProposal.id)}
                   onSave={() => toggleSaved(agendaProposal.id)}
                   onStatus={(status) => changeStatus(agendaProposal.id, status)}
@@ -2234,8 +2279,8 @@ export function GEFShell() {
                   supporters={state.supporters[gefProposal.id] ?? []}
                   user={user}
                   isGef
-                  supported={state.supportedIds.includes(gefProposal.id)}
-                  saved={state.savedIds.includes(gefProposal.id)}
+                  supported={userSupportedIds.includes(gefProposal.id)}
+                  saved={userSavedIds.includes(gefProposal.id)}
                   onSupport={() => toggleSupport(gefProposal.id)}
                   onSave={() => toggleSaved(gefProposal.id)}
                   onStatus={(status) => changeStatus(gefProposal.id, status)}
