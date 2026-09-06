@@ -337,41 +337,71 @@ export function toggleCommentLike(commentId: string, userId: string) {
   return { liked: index < 0, likes: comment.likes };
 }
 
-export function toggleSupport(proposalId: string, userId: string) {
+export function setSupport(proposalId: string, userId: string, supported: boolean) {
   const proposal = getProposal(proposalId);
   if (!proposal) return null;
   const store = getPlatformStore();
-  const supports = store.supportedByUser[userId] ?? [];
-  const supporters = store.supportersByProposal[proposalId] ?? [];
+  if (!store.supportedByUser[userId]) store.supportedByUser[userId] = [];
+  if (!store.supportersByProposal[proposalId]) store.supportersByProposal[proposalId] = [];
+
+  const supports = store.supportedByUser[userId];
+  const supporters = store.supportersByProposal[proposalId];
   const index = supports.indexOf(proposalId);
-  if (index >= 0) {
-    supports.splice(index, 1);
-    const supporterIndex = supporters.findIndex((supporter) => supporter.id === userId);
-    if (supporterIndex >= 0) supporters.splice(supporterIndex, 1);
-    proposal.supports = Math.max(0, proposal.supports - 1);
+  const supporterIndex = supporters.findIndex((supporter) => supporter.id === userId);
+
+  if (supported) {
+    if (index < 0) {
+      supports.push(proposalId);
+    }
+    if (supporterIndex < 0) {
+      const account = store.accounts.find((item) => item.id === userId);
+      supporters.push({
+        id: userId,
+        name: account?.name ?? "Estudante",
+        turma: account?.turma ?? "",
+      });
+    }
   } else {
-    supports.push(proposalId);
-    const account = store.accounts.find((item) => item.id === userId);
-    if (account && !supporters.some((supporter) => supporter.id === userId)) supporters.push({ id: account.id, name: account.name, turma: account.turma });
-    proposal.supports += 1;
+    if (index >= 0) {
+      supports.splice(index, 1);
+    }
+    if (supporterIndex >= 0) {
+      supporters.splice(supporterIndex, 1);
+    }
   }
-  store.supportedByUser[userId] = supports;
-  store.supportersByProposal[proposalId] = supporters;
+
+  proposal.supports = supporters.length;
   saveStoreToDisk(store);
-  return { supported: index < 0, supports: proposal.supports };
+  return { supported, supports: proposal.supports };
+}
+
+export function toggleSupport(proposalId: string, userId: string) {
+  const store = getPlatformStore();
+  const currentlySupported = (store.supportedByUser[userId] ?? []).includes(proposalId) ||
+    (store.supportersByProposal[proposalId] ?? []).some((supporter) => supporter.id === userId);
+  return setSupport(proposalId, userId, !currentlySupported);
+}
+
+export function setSaved(proposalId: string, userId: string, saved: boolean) {
+  const proposal = getProposal(proposalId);
+  if (!proposal) return null;
+  const store = getPlatformStore();
+  if (!store.savedByUser[userId]) store.savedByUser[userId] = [];
+  const savedProposals = store.savedByUser[userId];
+  const index = savedProposals.indexOf(proposalId);
+  if (saved && index < 0) {
+    savedProposals.push(proposalId);
+  } else if (!saved && index >= 0) {
+    savedProposals.splice(index, 1);
+  }
+  saveStoreToDisk(store);
+  return { saved };
 }
 
 export function toggleSaved(proposalId: string, userId: string) {
-  const proposal = getProposal(proposalId);
-  if (!proposal) return null;
   const store = getPlatformStore();
-  const saved = store.savedByUser[userId] ?? [];
-  const index = saved.indexOf(proposalId);
-  if (index >= 0) saved.splice(index, 1);
-  else saved.push(proposalId);
-  store.savedByUser[userId] = saved;
-  saveStoreToDisk(store);
-  return { saved: index < 0 };
+  const currentlySaved = (store.savedByUser[userId] ?? []).includes(proposalId);
+  return setSaved(proposalId, userId, !currentlySaved);
 }
 
 export function updateProposalStatus(proposalId: string, status: ProposalStatus, gefResponse?: string) {

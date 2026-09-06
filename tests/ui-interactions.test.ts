@@ -6,6 +6,8 @@ const shellSource = readFileSync("src/components/gefshell.tsx", "utf8");
 const stylesSource = readFileSync("src/app/globals.css", "utf8");
 const landingSource = readFileSync("src/app/page.tsx", "utf8");
 const listeningDemoSource = readFileSync("src/components/listening-demo.tsx", "utf8");
+const supportRouteSource = readFileSync("src/app/api/proposals/[id]/support/route.ts", "utf8");
+const saveRouteSource = readFileSync("src/app/api/proposals/[id]/save/route.ts", "utf8");
 
 test("proposal card keeps action controls outside an interactive card button", () => {
   assert.match(shellSource, /<div\s+className="proposal-card-main"/s);
@@ -67,6 +69,16 @@ test("support and save update the local state before waiting for the API", () =>
     assert.ok(fetchIndex >= 0, `${functionName} should still synchronize with the API`);
     assert.ok(stateIndex < fetchIndex, `${functionName} should render feedback before the network response`);
   }
+});
+
+test("support and save requests carry an explicit desired state", () => {
+  assert.match(shellSource, /const interactionKey = `support:\$\{id\}`;/);
+  assert.match(shellSource, /const interactionKey = `save:\$\{id\}`;/);
+  assert.match(shellSource, /beginInteraction\(interactionKey\)/);
+  assert.match(shellSource, /body: JSON\.stringify\(\{ supported: optimisticSupported \}\)/);
+  assert.match(shellSource, /body: JSON\.stringify\(\{ saved: optimisticSaved \}\)/);
+  assert.match(supportRouteSource, /setSupport\(id, user\.id, desiredSupported\)/);
+  assert.match(saveRouteSource, /setSaved\(id, user\.id, desiredSaved\)/);
 });
 
 test("comments detail keeps the conversation focused without the explanatory banner", () => {

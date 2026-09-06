@@ -1257,6 +1257,7 @@ export function GEFShell() {
   const [agendaProposalId, setAgendaProposalId] = useState<string | null>(null);
   const [gefProposalId, setGefProposalId] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState<"sidebar" | "topbar" | null>(null);
+  const interactionRevisions = useRef(new Map<string, number>());
   const [authReady, setAuthReady] = useState(false);
   const [evaluatingActivity, setEvaluatingActivity] = useState<Activity | null>(null);
   const [summaryActivity, setSummaryActivity] = useState<Activity | null>(null);
@@ -1374,6 +1375,16 @@ export function GEFShell() {
   const agendaProposal = agendaProposalId ? state.proposals.find((proposal) => proposal.id === agendaProposalId) : undefined;
   const gefProposal = gefProposalId ? state.proposals.find((proposal) => proposal.id === gefProposalId) : undefined;
 
+  function beginInteraction(key: string) {
+    const revision = (interactionRevisions.current.get(key) ?? 0) + 1;
+    interactionRevisions.current.set(key, revision);
+    return revision;
+  }
+
+  function isLatestInteraction(key: string, revision: number) {
+    return interactionRevisions.current.get(key) === revision;
+  }
+
   async function login(name: string, password: string): Promise<string | null> {
     const trimmedName = name.trim();
     const localAccount = state.accounts.find(
@@ -1403,6 +1414,27 @@ export function GEFShell() {
         return data.error || "Nome de usuário ou senha incorretos.";
       }
       setState((curr) => ({ ...curr, user: data.user }));
+      fetch("/api/platform")
+        .then((r) => r.json())
+        .then((pData) => {
+          if (pData.data) {
+            const p = pData.data;
+            setState((curr) => ({
+              ...curr,
+              proposals: p.proposals ?? curr.proposals,
+              comments: p.comments ?? curr.comments,
+              activities: p.activities ?? curr.activities,
+              notifications: p.notifications ?? curr.notifications,
+              supporters: p.supportersByProposal ?? curr.supporters,
+              supportedByUser: p.supportedByUser ?? curr.supportedByUser,
+              savedByUser: p.savedByUser ?? curr.savedByUser,
+              likedCommentsByUser: p.likedCommentsByUser ?? curr.likedCommentsByUser,
+              activityFeedbacks: p.activityFeedbacks ?? curr.activityFeedbacks,
+              chapaQuestions: p.chapaQuestions ?? curr.chapaQuestions,
+            }));
+          }
+        })
+        .catch(() => {});
       setView("proposals");
       return null;
     } catch {
@@ -1444,6 +1476,27 @@ export function GEFShell() {
         user: data.user,
         accounts: [...curr.accounts.filter((a) => a.name.toLowerCase() !== trimmedName.toLowerCase()), newAccount],
       }));
+      fetch("/api/platform")
+        .then((r) => r.json())
+        .then((pData) => {
+          if (pData.data) {
+            const p = pData.data;
+            setState((curr) => ({
+              ...curr,
+              proposals: p.proposals ?? curr.proposals,
+              comments: p.comments ?? curr.comments,
+              activities: p.activities ?? curr.activities,
+              notifications: p.notifications ?? curr.notifications,
+              supporters: p.supportersByProposal ?? curr.supporters,
+              supportedByUser: p.supportedByUser ?? curr.supportedByUser,
+              savedByUser: p.savedByUser ?? curr.savedByUser,
+              likedCommentsByUser: p.likedCommentsByUser ?? curr.likedCommentsByUser,
+              activityFeedbacks: p.activityFeedbacks ?? curr.activityFeedbacks,
+              chapaQuestions: p.chapaQuestions ?? curr.chapaQuestions,
+            }));
+          }
+        })
+        .catch(() => {});
       setView("proposals");
       return null;
     } catch {
@@ -1485,6 +1538,8 @@ export function GEFShell() {
     const wasSupported = userSupportedIds.includes(id);
     const previousSupports = state.proposals.find((proposal) => proposal.id === id)?.supports ?? 0;
     const optimisticSupported = !wasSupported;
+    const interactionKey = `support:${id}`;
+    const interactionRevision = beginInteraction(interactionKey);
 
     function applySupportState(supported: boolean, totalSupports: number) {
       setState((curr) => {
@@ -1508,13 +1563,15 @@ export function GEFShell() {
     applySupportState(optimisticSupported, Math.max(0, previousSupports + (optimisticSupported ? 1 : -1)));
 
     try {
-      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
+      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ supported: optimisticSupported }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o apoio.");
+      if (!isLatestInteraction(interactionKey, interactionRevision)) return;
       const supported = typeof data.data?.supported === "boolean" ? data.data.supported : optimisticSupported;
       const totalSupports = typeof data.data?.supports === "number" ? data.data.supports : previousSupports + (supported ? 1 : -1);
       applySupportState(supported, Math.max(0, totalSupports));
     } catch (err) {
+      if (!isLatestInteraction(interactionKey, interactionRevision)) return;
       applySupportState(wasSupported, previousSupports);
       console.error(err);
     }
@@ -1525,6 +1582,8 @@ export function GEFShell() {
     const currentUser = user;
     const wasSaved = userSavedIds.includes(id);
     const optimisticSaved = !wasSaved;
+    const interactionKey = `save:${id}`;
+    const interactionRevision = beginInteraction(interactionKey);
 
     function applySavedState(saved: boolean) {
       setState((curr) => {
@@ -1539,12 +1598,14 @@ export function GEFShell() {
     applySavedState(optimisticSaved);
 
     try {
-      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
+      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ saved: optimisticSaved }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o acompanhamento.");
+      if (!isLatestInteraction(interactionKey, interactionRevision)) return;
       const saved = typeof data.data?.saved === "boolean" ? data.data.saved : optimisticSaved;
       applySavedState(saved);
     } catch (err) {
+      if (!isLatestInteraction(interactionKey, interactionRevision)) return;
       applySavedState(wasSaved);
       console.error(err);
     }

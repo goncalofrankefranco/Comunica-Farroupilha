@@ -103,6 +103,52 @@ test("Platform Store: proposal creation, support, comment, and GEF official resp
   assert.equal(responseUpdated?.gefResponse, "Proposta aprovada! Agendando data com a coordenação.");
 });
 
+test("Platform Store: explicit support and save intents are idempotent", async () => {
+  const storeModule = await import("../src/lib/platform-store.ts");
+  const setSupport = (storeModule as typeof storeModule & { setSupport?: (proposalId: string, userId: string, supported: boolean) => { supported: boolean; supports: number } | null }).setSupport;
+  const setSaved = (storeModule as typeof storeModule & { setSaved?: (proposalId: string, userId: string, saved: boolean) => { saved: boolean } | null }).setSaved;
+
+  assert.equal(typeof setSupport, "function", "The platform store should expose explicit support intent.");
+  assert.equal(typeof setSaved, "function", "The platform store should expose explicit save intent.");
+  if (!setSupport || !setSaved) return;
+
+  const proposal = createProposal({
+    title: "Intenção explícita de interação",
+    body: "Proposta criada para garantir que cliques repetidos não invertam o estado.",
+    author: "Teste de interação",
+    authorId: "interaction-test",
+    anonymous: false,
+    theme: "Outros",
+    origin: "student",
+  });
+
+  assert.deepEqual(setSupport(proposal.id, "interaction-user", true), { supported: true, supports: 1 });
+  assert.deepEqual(setSupport(proposal.id, "interaction-user", true), { supported: true, supports: 1 });
+  assert.deepEqual(setSupport(proposal.id, "interaction-user", false), { supported: false, supports: 0 });
+  assert.deepEqual(setSupport(proposal.id, "interaction-user", false), { supported: false, supports: 0 });
+
+  assert.deepEqual(setSaved(proposal.id, "interaction-user", true), { saved: true });
+  assert.deepEqual(setSaved(proposal.id, "interaction-user", true), { saved: true });
+  assert.deepEqual(setSaved(proposal.id, "interaction-user", false), { saved: false });
+  assert.deepEqual(setSaved(proposal.id, "interaction-user", false), { saved: false });
+
+  // Out-of-sync recovery: supporter in supportersByProposal but not supportedByUser
+  const store = storeModule.getPlatformStore();
+  store.supportersByProposal[proposal.id] = [{ id: "legacy-user", name: "Legado", turma: "8º" }];
+  store.supportedByUser["legacy-user"] = []; // desynced
+  // Calling setSupport with true recovers full sync without duplicating
+  const recoveredAdd = setSupport(proposal.id, "legacy-user", true);
+  assert.equal(recoveredAdd?.supported, true);
+  assert.ok(store.supportedByUser["legacy-user"].includes(proposal.id));
+  assert.equal(store.supportersByProposal[proposal.id].filter((s) => s.id === "legacy-user").length, 1);
+
+  // Calling setSupport with false cleanly removes from both
+  const recoveredRemove = setSupport(proposal.id, "legacy-user", false);
+  assert.equal(recoveredRemove?.supported, false);
+  assert.ok(!store.supportedByUser["legacy-user"].includes(proposal.id));
+  assert.equal(store.supportersByProposal[proposal.id].filter((s) => s.id === "legacy-user").length, 0);
+});
+
 test("Platform Store: activities and student post-recess feedback", () => {
   const proposal = createProposal({
     title: "Atividade de Teste do Recreio",
