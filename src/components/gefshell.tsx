@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { SelectMenu } from "@/components/select-menu";
 
 type Role = "student" | "gef";
 type View = "proposals" | "saved" | "agenda" | "chapas" | "notifications" | "gef";
@@ -368,14 +369,16 @@ function ChapasView({
         ))}
       </div>
       <div className="chapa-toolbar">
-        <label>
+        <div className="chapa-toolbar-control">
           <span>Área</span>
-          <select value={area} onChange={(event) => setArea(event.target.value)}>
-            <option>Todas</option>
-            {CHAPA_AREAS.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <Icon name="chevron" size={14} />
-        </label>
+          <SelectMenu
+            value={area}
+            onChange={setArea}
+            options={["Todas", ...CHAPA_AREAS].map((item) => ({ value: item, label: item }))}
+            ariaLabel="Filtrar propostas da chapa por área"
+            className="select-menu-chapa"
+          />
+        </div>
         <span className="chapa-count">{proposals.length} {proposals.length === 1 ? "proposta" : "propostas"}</span>
       </div>
       <article className="chapa-profile" style={{ "--chapa-color": chapa.color } as React.CSSProperties}>
@@ -496,7 +499,8 @@ function ProposalCard({
 }) {
   return (
     <article className={`proposal-card ${selected ? "is-selected" : ""}`}>
-      <button className="proposal-card-main" onClick={onSelect} aria-expanded={selected}>
+      <div className="proposal-card-main">
+        <button type="button" className="proposal-card-select" onClick={onSelect} aria-expanded={selected} aria-controls={`proposal-detail-${proposal.id}`}>
         <div className="proposal-card-top">
           <StatusBadge status={proposal.status} />
           {proposal.origin === "gef" && <span className="gef-origin-tag"><Icon name="spark" size={13} /> Consulta do GEF</span>}
@@ -509,6 +513,7 @@ function ProposalCard({
           </div>
           {selected && <ProgressSteps status={proposal.status} />}
         </div>
+        </button>
         <div className="proposal-card-meta">
           <span className="author-meta">
             <Avatar name={proposal.origin === "gef" ? "GEF" : proposal.anonymous ? "EA" : proposal.author} role={proposal.origin === "gef" ? "gef" : undefined} small />
@@ -519,14 +524,14 @@ function ProposalCard({
           </span>
           <span className="support-count"><Icon name="users" size={19} /><span><strong>{proposal.supports}</strong><small>Apoios</small></span></span>
           <span className="comment-count"><Icon name="message" size={18} /> {proposal.comments}</span>
-          <span className={`support-button ${supported ? "is-supported" : ""}`} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onSupport(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSupport(); } }}>
+          <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); onSupport(); }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
-          </span>
-          <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
+          </button>
+          <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
             <Icon name="bookmark" size={18} />
           </button>
         </div>
-      </button>
+      </div>
 
       {isGef && selected && (
         <div className="gef-card-actions">
@@ -683,7 +688,7 @@ function ProposalDetail({
   }
 
   return (
-    <div className="detail-grid">
+    <div className="detail-grid" id={`proposal-detail-${proposal.id}`}>
       <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} />
       <div className="detail-side">
         <SupportersPanel supporters={supporters} total={proposal.supports} />
@@ -782,10 +787,10 @@ function ProposalPreview({
         <span>{proposal.theme}</span>
         <span>{proposal.supports} apoios</span>
         <span>{proposal.comments} comentários</span>
-        <button type="button" className={`support-button ${supported ? "is-supported" : ""}`} onClick={onSupport}>
+        <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""}`} aria-pressed={supported} onClick={onSupport}>
           <Icon name="thumbs" size={17} />{supported ? "Apoiado" : "Apoiar"}
         </button>
-        <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} onClick={onSave} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
+        <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""}`} aria-pressed={saved} onClick={onSave} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
           <Icon name="bookmark" size={17} />{saved ? "Acompanhando" : "Acompanhar"}
         </button>
       </div>
@@ -831,9 +836,27 @@ function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => vo
       <label>Título<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Mais jogos para jogar em grupo" maxLength={120} /></label>
       <label>Sua proposta<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="O que acontece hoje? Qual mudança você gostaria de experimentar?" rows={6} maxLength={3000} /></label>
       <div className="form-row">
-        <label>Tema<select value={theme} onChange={(event) => setTheme(event.target.value)}>{THEMES.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <div className="form-field">
+          <span className="form-field-label">Tema</span>
+          <SelectMenu
+            value={theme}
+            onChange={setTheme}
+            options={THEMES.map((item) => ({ value: item, label: item }))}
+            ariaLabel="Tema da proposta"
+            className="select-menu-field"
+          />
+        </div>
         {!isGef ? (
-          <label className="visibility-select">Autoria<select value={anonymous ? "anonymous" : "named"} onChange={(event) => setAnonymous(event.target.value === "anonymous")}><option value="named">Publicar com meu nome</option><option value="anonymous">Publicar anonimamente</option></select></label>
+          <div className="form-field visibility-select">
+            <span className="form-field-label">Autoria</span>
+            <SelectMenu
+              value={anonymous ? "anonymous" : "named"}
+              onChange={(value) => setAnonymous(value === "anonymous")}
+              options={[{ value: "named", label: "Publicar com meu nome" }, { value: "anonymous", label: "Publicar anonimamente" }]}
+              ariaLabel="Visibilidade da autoria"
+              className="select-menu-field"
+            />
+          </div>
         ) : (
           <label>Autoria<input value="Grêmio Estudantil Farroupilha" disabled /></label>
         )}
@@ -922,10 +945,13 @@ function ActivityFeedbackModal({
           ) : (
             <div className="feedback-question">
               <label className="question-title">Qual foi o motivo de não participar?</label>
-              <select value={reason} onChange={(e) => setReason(e.target.value)} required>
-                <option value="">Selecione o motivo principal...</option>
-                {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <SelectMenu
+                value={reason}
+                onChange={setReason}
+                options={[{ value: "", label: "Selecione o motivo principal..." }, ...REASONS.map((item) => ({ value: item, label: item }))]}
+                ariaLabel="Motivo de não participação"
+                className="select-menu-field"
+              />
             </div>
           )}
 
@@ -1174,12 +1200,16 @@ function ActivityComposer({ proposals, onCancel, onCreate }: { proposals: Propos
         </div>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="Fechar agenda"><Icon name="close" size={20} /></button>
       </div>
-      <label>
-        Proposta de origem
-        <select value={proposalId} onChange={(event) => { setProposalId(event.target.value); const p = list.find((item) => item.id === event.target.value); if (p) setTitle(p.title); }}>
-          {list.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-        </select>
-      </label>
+      <div className="form-field">
+        <span className="form-field-label">Proposta de origem</span>
+        <SelectMenu
+          value={proposalId}
+          onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
+          options={list.map((p) => ({ value: p.id, label: p.title }))}
+          ariaLabel="Proposta de origem da atividade"
+          className="select-menu-field"
+        />
+      </div>
       <label>Título da atividade<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       <div className="form-row">
         <label>Data<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
@@ -1859,7 +1889,7 @@ export function GEFShell() {
           </button>
           {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Icon name="grid" size={20} />Visão do GEF</button>}
         </nav>
-        <button className="sidebar-create" onClick={() => { setComposerOpen(true); setView("proposals"); }}>
+        <button className="sidebar-create tactile-control" onClick={() => { setComposerOpen(true); setView("proposals"); }}>
           <Icon name="plus" size={21} />{isGef ? "Criar consulta" : "Criar proposta"}
         </button>
         <div className="profile-wrap">
@@ -1921,7 +1951,7 @@ export function GEFShell() {
                   <h2>Propostas da comunidade</h2>
                   <p>Veja, apoie e comente ideias criadas por estudantes e consultas abertas pelo GEF.</p>
                 </div>
-                <button className="primary-button heading-action" onClick={() => setComposerOpen(true)}>
+                <button className="primary-button heading-action tactile-control" onClick={() => setComposerOpen(true)}>
                   <Icon name="plus" size={17} />{isGef ? "Criar consulta" : "Criar proposta"}
                 </button>
               </section>
@@ -1934,29 +1964,35 @@ export function GEFShell() {
                 <label className="select-filter">
                   <Icon name="grid" size={16} />
                   <span className="filter-label">Tema:</span>
-                  <select value={themeFilter} onChange={(event) => setThemeFilter(event.target.value)}>
-                    <option>Todos</option>
-                    {THEMES.map((theme) => <option key={theme}>{theme}</option>)}
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={themeFilter}
+                    onChange={setThemeFilter}
+                    options={["Todos", ...THEMES].map((item) => ({ value: item, label: item }))}
+                    ariaLabel="Filtrar propostas por tema"
+                    className="select-menu-inline"
+                  />
                 </label>
                 <label className="select-filter">
                   <span className="status-filter-dot" />
                   <span className="filter-label">Situação:</span>
-                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ProposalStatus | "all")}>
-                    <option value="all">Todas</option>
-                    {Object.entries(STATUS).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as ProposalStatus | "all")}
+                    options={[{ value: "all", label: "Todas" }, ...Object.entries(STATUS).map(([key, item]) => ({ value: key, label: item.label }))]}
+                    ariaLabel="Filtrar propostas por situação"
+                    className="select-menu-inline"
+                  />
                 </label>
                 <label className="select-filter sort-filter">
                   <Icon name="filter" size={16} />
                   <span className="filter-label">Ordenar:</span>
-                  <select value={sort} onChange={(event) => setSort(event.target.value as "recent" | "supports")}>
-                    <option value="recent">Mais recentes</option>
-                    <option value="supports">Mais apoiadas</option>
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={sort}
+                    onChange={(value) => setSort(value as "recent" | "supports")}
+                    options={[{ value: "recent", label: "Mais recentes" }, { value: "supports", label: "Mais apoiadas" }]}
+                    ariaLabel="Ordenar propostas"
+                    className="select-menu-inline"
+                  />
                 </label>
               </div>
 
