@@ -66,3 +66,25 @@ test("support and save update the local state before waiting for the API", () =>
     assert.ok(stateIndex < fetchIndex, `${functionName} should render feedback before the network response`);
   }
 });
+
+test("comments detail keeps the conversation focused without the explanatory banner", () => {
+  assert.doesNotMatch(shellSource, /<aside className="how-card">/);
+  assert.doesNotMatch(shellSource, /ÚLTIMO RETORNO DO GEF/);
+});
+
+test("top-right profile menu is anchored to its trigger", () => {
+  assert.match(shellSource, /profileOpen === "topbar"/);
+  assert.match(shellSource, /className="topbar-profile-wrap"/);
+  assert.match(stylesSource, /\.topbar-profile-wrap \.profile-menu[^}]*top:calc\(100% \+ 10px\)/);
+});
+
+test("comments return as an attached tab with a calm empty state", () => {
+  assert.match(shellSource, /className="comments-empty-state"/);
+  assert.match(stylesSource, /\.detail-grid\{align-items:start;margin:0 12px 8px;padding:22px 18px;border:1px solid var\(--app-border\);border-top:0/);
+  assert.match(stylesSource, /\.comments-section\{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none/);
+  assert.match(stylesSource, /\.comments-empty-state/);
+});
+
+test("app omits the mid-feed institutional banner", () => {
+  assert.doesNotMatch(shellSource, /className="institutional-banner"/);
+});

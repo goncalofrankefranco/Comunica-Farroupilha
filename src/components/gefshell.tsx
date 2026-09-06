@@ -191,6 +191,15 @@ function Avatar({ name, role, small = false }: { name: string; role?: Role; smal
   return <span className={`avatar ${role === "gef" ? "avatar-gef" : ""} ${small ? "avatar-small" : ""}`} aria-hidden="true">{initials}</span>;
 }
 
+function ProfileMenu({ onLogout, onReset }: { onLogout: () => void; onReset: () => void }) {
+  return (
+    <div className="profile-menu">
+      <button type="button" onClick={onLogout}><Icon name="logout" size={16} />Sair</button>
+      <button type="button" onClick={onReset}><Icon name="refresh" size={16} />Restaurar dados</button>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: ProposalStatus }) {
   const item = STATUS[status] ?? STATUS.received;
   return <span className="status-badge" style={{ color: item.color, backgroundColor: `${item.color}18` }}><span className="status-dot" style={{ backgroundColor: item.color }} />{item.label}</span>;
@@ -605,8 +614,11 @@ function CommentThread({
   return (
     <section className="comments-section" aria-labelledby="comments-title">
       <div className="comments-heading">
-        <h3 id="comments-title">Comentários ({comments.filter((comment) => comment.proposalId === proposalId).length})</h3>
-        <span>Conversa aberta para a comunidade</span>
+        <span className="comments-heading-mark"><Icon name="message" size={16} /></span>
+        <div className="comments-heading-copy">
+          <h3 id="comments-title">Comentários ({comments.filter((comment) => comment.proposalId === proposalId).length})</h3>
+          <span>Conversa aberta para a comunidade</span>
+        </div>
       </div>
       <div className="comment-list">
         {roots.map((comment) => {
@@ -653,7 +665,13 @@ function CommentThread({
           </div>
           );
         })}
-        {roots.length === 0 && <p className="empty-copy">Ainda não há comentários. Comece a conversa.</p>}
+        {roots.length === 0 && (
+          <div className="comments-empty-state">
+            <span className="comments-empty-icon"><Icon name="message" size={18} /></span>
+            <strong>A conversa começa aqui.</strong>
+            <p>Compartilhe uma ideia ou responda à conversa para continuar a escuta.</p>
+          </div>
+        )}
       </div>
       <form className="comment-composer" onSubmit={submit}>
         <Avatar name={user.name} role={user.role} small />
@@ -705,10 +723,10 @@ function ProposalDetail({
   comments,
   supporters,
   user,
-  isGef,
   onComment,
   onLike,
   likedCommentIds,
+  isGef,
   onSubmitGefResponse,
 }: {
   proposal: Proposal;
@@ -721,13 +739,9 @@ function ProposalDetail({
   likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
 }) {
-  const [showGefReply, setShowGefReply] = useState(true);
   const [editingGefResponse, setEditingGefResponse] = useState(false);
   const [gefResponseText, setGefResponseText] = useState(proposal.gefResponse ?? "");
   const [savingResponse, setSavingResponse] = useState(false);
-
-  const gefReplies = comments.filter((comment) => comment.proposalId === proposal.id && comment.role === "gef");
-  const latestGefReply = gefReplies[gefReplies.length - 1];
 
   async function handleSaveGefResponse() {
     if (!onSubmitGefResponse || !gefResponseText.trim()) return;
@@ -742,20 +756,13 @@ function ProposalDetail({
       <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
       <div className="detail-side">
         <SupportersPanel supporters={supporters} total={proposal.supports} />
-        <aside className="how-card">
-          <span className="how-icon"><Icon name="info" size={22} /></span>
-          <h3>{isGef ? "Visão do GEF" : "Como funciona?"}</h3>
-          <p>{isGef ? "Acompanhe a conversa, dê um retorno e mova a ideia para o próximo passo." : "As propostas são analisadas pelo GEF e podem virar atividades no recreio."}</p>
-
-          {proposal.gefResponse && (
-            <div className="gef-response-preview">
-              <span className="mini-label">RESPOSTA E JUSTIFICATIVA DO GEF</span>
-              <p>{proposal.gefResponse}</p>
-              <small>{proposal.gefResponseAt}</small>
+        {isGef && onSubmitGefResponse && (
+          <div className="gef-response-tools" aria-label="Resposta oficial do GEF">
+            <div className="gef-response-tools-head">
+              <span className="mini-label">RETORNO OFICIAL DO GEF</span>
+              {proposal.gefResponse && <span className="response-status">Publicado</span>}
             </div>
-          )}
-
-          {isGef && onSubmitGefResponse && (
+            {proposal.gefResponse && <p className="gef-response-tools-copy">{proposal.gefResponse}</p>}
             <div className="gef-response-manager">
               {editingGefResponse ? (
                 <div className="response-editor">
@@ -771,22 +778,8 @@ function ProposalDetail({
                 </button>
               )}
             </div>
-          )}
-
-          {!proposal.gefResponse && (
-            <>
-              <button type="button" className="learn-more-button" onClick={() => setShowGefReply((current) => !current)}>
-                {showGefReply ? "Ocultar comentários do GEF" : "Ver comentários do GEF"} <Icon name="arrow" size={14} />
-              </button>
-              {showGefReply && (
-                <div className="gef-response-preview">
-                  <span className="mini-label">ÚLTIMO RETORNO DO GEF</span>
-                  <p>{latestGefReply?.body ?? "O GEF ainda não respondeu esta proposta. Acompanhe os comentários para ver as próximas atualizações."}</p>
-                </div>
-              )}
-            </>
-          )}
-        </aside>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1344,7 +1337,7 @@ export function GEFShell() {
   const [agendaMonthKey, setAgendaMonthKey] = useState("2026-09");
   const [agendaProposalId, setAgendaProposalId] = useState<string | null>(null);
   const [gefProposalId, setGefProposalId] = useState<string | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState<"sidebar" | "topbar" | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [evaluatingActivity, setEvaluatingActivity] = useState<Activity | null>(null);
   const [summaryActivity, setSummaryActivity] = useState<Activity | null>(null);
@@ -1557,12 +1550,12 @@ export function GEFShell() {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {}
     setState((curr) => ({ ...curr, user: null }));
-    setProfileOpen(false);
+    setProfileOpen(null);
   }
 
   function changeView(next: View) {
     setView(next);
-    setProfileOpen(false);
+    setProfileOpen(null);
     setComposerOpen(false);
     setActivityOpen(false);
   }
@@ -1966,7 +1959,7 @@ export function GEFShell() {
     window.localStorage.removeItem("gremio-comunica-demo");
     setState(defaultState);
     setView("proposals");
-    setProfileOpen(false);
+    setProfileOpen(null);
   }
 
   if (!authReady) {
@@ -2003,17 +1996,12 @@ export function GEFShell() {
           <Icon name="plus" size={21} />{isGef ? "Criar consulta" : "Criar proposta"}
         </button>
         <div className="profile-wrap">
-          <button className="profile-button" onClick={() => setProfileOpen((open) => !open)}>
+          <button className="profile-button" onClick={() => setProfileOpen((open) => open === "sidebar" ? null : "sidebar")}>
             <Avatar name={user.name} role={user.role} />
             <span><strong>{user.name}</strong><small>{isGef ? "Administrador GEF" : user.turma}</small></span>
             <Icon name="chevron" size={17} />
           </button>
-          {profileOpen && (
-            <div className="profile-menu">
-              <button onClick={logout}><Icon name="logout" size={16} />Sair</button>
-              <button onClick={resetDemo}><Icon name="refresh" size={16} />Restaurar dados</button>
-            </div>
-          )}
+          {profileOpen === "sidebar" && <ProfileMenu onLogout={logout} onReset={resetDemo} />}
         </div>
       </aside>
 
@@ -2030,9 +2018,12 @@ export function GEFShell() {
             <button className="top-icon notification-top" onClick={() => changeView("notifications")} aria-label={`Notificações${unread ? `, ${unread} não lidas` : ""}`}>
               <Icon name="bell" size={21} />{unread > 0 && <span>{unread}</span>}
             </button>
-            <button className="top-avatar" onClick={() => setProfileOpen((open) => !open)} aria-label="Abrir menu do perfil">
-              <Avatar name={user.name} role={user.role} small />
-            </button>
+            <div className="topbar-profile-wrap">
+              <button className="top-avatar" onClick={() => setProfileOpen((open) => open === "topbar" ? null : "topbar")} aria-label="Abrir menu do perfil">
+                <Avatar name={user.name} role={user.role} small />
+              </button>
+              {profileOpen === "topbar" && <ProfileMenu onLogout={logout} onReset={resetDemo} />}
+            </div>
           </div>
         </header>
 
@@ -2049,11 +2040,6 @@ export function GEFShell() {
                   <Image className="welcome-logo" src="/brand/gremio-comunica.webp" alt="Logo Comunica Farroupilha" width={180} height={120} priority />
                 </div>
               </section>
-              <p className="institutional-banner">
-                <Icon name="check" size={16} />
-                <span>A direção de comunicação do Grêmio Estudantil Farroupilha já aprova esta ideia e considera essencial desenvolver atividades de lazer no recreio.</span>
-              </p>
-
               {composerOpen && <Composer user={user} onCancel={() => setComposerOpen(false)} onCreate={createProposal} />}
 
               <section className="content-heading">
