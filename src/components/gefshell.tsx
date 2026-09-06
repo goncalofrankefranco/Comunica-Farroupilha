@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { SelectMenu } from "@/components/select-menu";
 
 type Role = "student" | "gef";
@@ -162,6 +162,26 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
       {paths.map((path, index) => <path key={`${name}-${index}`} d={path} />)}
     </svg>
   );
+}
+
+type TactileAction = "support" | "save";
+
+function useTactileCommit() {
+  const [committingAction, setCommittingAction] = useState<TactileAction | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => {
+    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+  }, []);
+
+  function run(action: TactileAction, callback: () => void) {
+    setCommittingAction(action);
+    callback();
+    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCommittingAction(null), 360);
+  }
+
+  return { committingAction, run };
 }
 
 function Avatar({ name, role, small = false }: { name: string; role?: Role; small?: boolean }) {
@@ -497,6 +517,8 @@ function ProposalCard({
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
 }) {
+  const { committingAction, run } = useTactileCommit();
+
   return (
     <article className={`proposal-card ${selected ? "is-selected" : ""}`}>
       <div className="proposal-card-main">
@@ -523,11 +545,13 @@ function ProposalCard({
             </span>
           </span>
           <span className="support-count"><Icon name="users" size={19} /><span><strong>{proposal.supports}</strong><small>Apoios</small></span></span>
-          <span className="comment-count"><Icon name="message" size={18} /> {proposal.comments}</span>
-          <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); onSupport(); }}>
+          <button type="button" className="comment-count tactile-control" aria-label={`Abrir comentários da proposta (${proposal.comments})`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
+            <Icon name="message" size={18} /> {proposal.comments}
+          </button>
+          <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); run("support", onSupport); }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
           </button>
-          <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
+          <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); run("save", onSave); }}>
             <Icon name="bookmark" size={18} />
           </button>
         </div>
@@ -771,6 +795,8 @@ function ProposalPreview({
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { committingAction, run } = useTactileCommit();
+
   return (
     <section className="context-proposal" aria-labelledby={`context-proposal-${proposal.id}`}>
       <div className="context-proposal-head">
@@ -787,10 +813,10 @@ function ProposalPreview({
         <span>{proposal.theme}</span>
         <span>{proposal.supports} apoios</span>
         <span>{proposal.comments} comentários</span>
-        <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""}`} aria-pressed={supported} onClick={onSupport}>
+        <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={() => run("support", onSupport)}>
           <Icon name="thumbs" size={17} />{supported ? "Apoiado" : "Apoiar"}
         </button>
-        <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""}`} aria-pressed={saved} onClick={onSave} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
+        <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} onClick={() => run("save", onSave)} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
           <Icon name="bookmark" size={17} />{saved ? "Acompanhando" : "Acompanhar"}
         </button>
       </div>

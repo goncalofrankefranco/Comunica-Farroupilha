@@ -27,3 +27,20 @@ test("app selection controls use the rounded listbox component", () => {
   assert.match(readFileSync("src/components/select-menu.tsx", "utf8"), /role="listbox"/);
   assert.match(readFileSync("src/components/select-menu.tsx", "utf8"), /aria-expanded/);
 });
+
+test("comment count is an action that opens the proposal detail", () => {
+  assert.match(shellSource, /<button type="button" className="comment-count tactile-control"/);
+  assert.match(shellSource, /className="comment-count tactile-control"[^>]*onClick=\{[^}]*onSelect\(\);/);
+  assert.doesNotMatch(shellSource, /<span className="comment-count"/);
+});
+
+test("tactile controls have a visible press and commit response", () => {
+  assert.match(stylesSource, /\.tactile-control:active:not\(:disabled\)\{transform:translateY\(1px\) scale\(\.94\)/);
+  assert.match(stylesSource, /@keyframes control-commit/);
+  assert.match(stylesSource, /\.tactile-control\.is-committing[^}]*animation:[^;}]*control-commit/);
+});
+
+test("proposal comments detail has a smooth card-attached entrance", () => {
+  assert.match(stylesSource, /@keyframes proposal-detail-in/);
+  assert.match(stylesSource, /\.detail-grid[^}]*animation:[^;}]*proposal-detail-in/);
+});
