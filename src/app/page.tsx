@@ -2,81 +2,129 @@ import Image from "next/image";
 import { Arrow } from "@/components/arrow";
 import { ListeningDemo } from "@/components/listening-demo";
 
-const modules = [
-  { title: "Escuta e propostas", text: "Um espaço para contar como está o recreio, sugerir mudanças e opinar sobre ideias dos alunos e do próprio GEF.", detail: "Da sua experiência a uma conversa com retorno." },
-  { title: "Agenda e atividades", text: "As ações confirmadas em um só lugar. O que vai acontecer, onde participar e como contar depois o que funcionou.", detail: "Da ideia combinada ao encontro no intervalo." },
-  { title: "Chapas e compromissos", text: "Propostas para o lazer apresentadas com clareza e um jeito de acompanhar os compromissos da gestão eleita.", detail: "Do que foi proposto ao que está acontecendo." },
+const platformSteps = [
+  { number: "01", title: "Propor", text: "Registre o que faria diferença no intervalo." },
+  { number: "02", title: "Acompanhar", text: "Veja o que está em pauta e acompanhe os próximos passos." },
+  { number: "03", title: "Participar", text: "Comente, apoie e ajude a escolher o que vem depois." },
 ];
 
 export default function Home() {
   return (
-    <>
+    <div className="landing-page">
       <a className="skip-link" href="#conteudo">Pular para o conteúdo</a>
-      <header className="site-header" id="inicio">
-        <a href="#inicio" className="brand" aria-label="Comunica Farroupilha, início">
+
+      <header className="landing-header" id="inicio">
+        <a href="#inicio" className="landing-brand" aria-label="Comunica Farroupilha, início">
           <Image src="/brand/gremio-comunica.webp" width={84} height={56} alt="" priority />
-          <span>comunica<span className="brand-school">farroupilha</span></span>
+          <span>comunica <strong>farroupilha</strong></span>
         </a>
-        <nav aria-label="Navegação principal">
-          <a href="#proposta">A proposta</a>
-          <a href="#como-funciona">Como vai funcionar</a>
-          <a href="/app" className="nav-cta">Entrar na plataforma <Arrow diagonal /></a>
+        <nav className="landing-nav" aria-label="Navegação principal">
+          <a href="#a-ideia">A ideia</a>
+          <a href="#plataforma">A plataforma</a>
+          <a href="/app" className="landing-nav-cta">Entrar <Arrow diagonal /></a>
         </nav>
       </header>
 
       <main id="conteudo">
-        <section className="hero wrap" aria-labelledby="hero-title">
-          <div className="hero-copy">
-            <h1 id="hero-title">O recreio<br />também é <span>seu.</span></h1>
-            <p>Mais escuta. Mais participação.<br />Um recreio com a nossa cara.</p>
-            <p className="hero-description">Estamos criando um espaço para aproximar você e o GEF — e transformar o que a gente vive no intervalo em ideias para melhorar.</p>
-            <a href="/app" className="button button-orange">Conheça a proposta <Arrow /></a>
+        <section className="landing-hero" aria-labelledby="hero-title">
+          <div className="landing-hero-copy">
+            <span className="landing-kicker">COMUNICA FARROUPILHA</span>
+            <h1 id="hero-title">O recreio<br />também é <em>seu.</em></h1>
+            <p className="landing-hero-lead">Escutar. Propor. Fazer acontecer.</p>
+            <p className="landing-hero-description">Um espaço para transformar experiências do intervalo em próximos passos.</p>
+            <a href="/app" className="landing-button landing-button-orange">Entrar na conversa <Arrow /></a>
+            <div className="landing-hero-meta" aria-label="Temas do projeto">
+              <span>arte</span><i aria-hidden="true" /> <span>movimento</span><i aria-hidden="true" /> <span>encontro</span>
+            </div>
           </div>
-          <div className="hero-art">
-            <Image className="hero-logo" src="/brand/gremio-comunica.webp" alt="Logo do Comunica Farroupilha: um megafone laranja com as letras GEF dentro de um balão de conversa" width={1536} height={1024} sizes="(max-width: 700px) 90vw, 48vw" priority />
-            <p className="art-caption">Sua voz faz parte<br /><strong>dessa conversa.</strong></p>
+
+          <div className="landing-hero-visual">
+            <div className="landing-hero-image-shell">
+              <Image className="landing-hero-image" src="/landing/mural-pista.webp" alt="Quadra do Colégio Farroupilha diante de um mural colorido" fill sizes="(max-width: 800px) 92vw, 58vw" priority />
+              <span className="landing-hero-image-label">O recreio em movimento</span>
+            </div>
+            <div className="landing-hero-sticker" aria-hidden="true"><span>uma escola</span><strong>com a nossa cara.</strong></div>
+            <div className="landing-hero-rail"><span>01</span><span>onde tudo começa</span></div>
           </div>
-          <div className="hero-foot"><span>Uma proposta para o Grêmio Estudantil Farroupilha</span><a href="#proposta">Vem entender <Arrow /></a></div>
         </section>
 
-        <div className="statement" aria-label="Ouvir, construir juntos e fazer acontecer">
-          <div className="wrap statement-inner"><span>Ouvir.</span><Arrow /><span>Construir juntos.</span><Arrow /><span>Fazer acontecer.</span></div>
+        <div className="landing-marquee" aria-label="Ouvir, imaginar e construir juntos">
+          <div className="landing-marquee-inner"><span>Ouvir</span><b>＋</b><span>Imaginar</span><b>＋</b><span>Construir</span><b>＋</b><span>Fazer</span></div>
         </div>
 
-        <section id="proposta" className="proposal wrap section-space" aria-labelledby="proposal-title">
-          <h2 id="proposal-title">Um intervalo.<br /><span>Muitas formas<br />de aproveitar.</span></h2>
-          <div className="proposal-copy">
-            <p className="lead">Jogar, conversar, ouvir música ou só dar uma pausa. Cada aluno vive o recreio de um jeito.</p>
-            <p>Antes de decidir o que mudar, precisamos ouvir o que está bom, o que incomoda e o que ainda faz falta. É para isso que nasce o Comunica Farroupilha.</p>
-            <p>A proposta é abrir essa conversa nos dois sentidos: você traz experiências e sugestões, o GEF apresenta ideias, e todo mundo pode ajudar a pensar os próximos passos.</p>
-            <p className="institutional-note">A direção de comunicação do Grêmio Estudantil Farroupilha já aprova esta ideia e a considera essencial para o desenvolvimento de atividades de lazer no recreio.</p>
-            <a className="text-link" href="#experimente">Veja como essa escuta pode acontecer <Arrow diagonal /></a>
+        <section id="a-ideia" className="landing-story" aria-labelledby="story-title">
+          <div className="landing-story-copy">
+            <span className="landing-kicker">O PONTO DE PARTIDA</span>
+            <h2 id="story-title">O intervalo tem muitas histórias.</h2>
+            <p>Jogar, conversar, ouvir música ou respirar. Cada pessoa vive o recreio de um jeito.</p>
+            <a className="landing-text-link" href="#plataforma">Entender a ideia <Arrow diagonal /></a>
+          </div>
+
+          <div className="landing-photo-grid">
+            <figure className="landing-story-image landing-story-image-wide">
+              <Image src="/landing/patio-geral.webp" alt="Pátio central do colégio no fim da tarde" fill sizes="(max-width: 800px) 92vw, 47vw" />
+              <figcaption>Um espaço comum.<br /><strong>Muitas experiências.</strong></figcaption>
+            </figure>
+            <figure className="landing-story-image landing-story-image-tall">
+              <Image src="/landing/mural-retrato.webp" alt="Mural colorido com um rosto e um beija-flor" fill sizes="(max-width: 800px) 68vw, 25vw" />
+              <figcaption>Arte que também<br /><strong>escuta.</strong></figcaption>
+            </figure>
           </div>
         </section>
 
-        <section id="experimente" className="listening-section section-space" aria-labelledby="listening-title">
-          <div className="wrap">
-            <div className="section-intro"><h2 id="listening-title">E se o próximo<br />recreio tivesse…</h2><p>Escolha uma possibilidade e veja como uma ideia pode abrir espaço para diferentes vozes.</p></div>
-            <ListeningDemo />
-            <p className="demo-disclaimer">Demonstração da proposta. Os cenários são ilustrativos; nenhuma resposta é enviada ou armazenada.</p>
+        <section id="plataforma" className="landing-platform" aria-labelledby="platform-title">
+          <div className="landing-platform-head">
+            <div>
+              <span className="landing-kicker">UMA CONVERSA QUE CONTINUA</span>
+              <h2 id="platform-title">Da ideia ao<br /><em>próximo recreio.</em></h2>
+            </div>
+            <p>Uma plataforma simples para dar visibilidade ao que a comunidade imagina.</p>
+          </div>
+
+          <div className="landing-platform-grid">
+            <div className="landing-platform-image-shell">
+              <Image className="landing-platform-image" src="/landing/corredor-jogos.webp" alt="Corredor coberto do colégio com mesas de pebolim" fill sizes="(max-width: 800px) 92vw, 55vw" />
+              <span className="landing-platform-image-note">O que pode acontecer<br /><strong>no intervalo?</strong></span>
+            </div>
+            <div className="landing-platform-copy">
+              {platformSteps.map((step) => (
+                <article className="landing-step" key={step.number}>
+                  <span className="landing-step-number">{step.number}</span>
+                  <div><h3>{step.title}</h3><p>{step.text}</p></div>
+                </article>
+              ))}
+              <a href="/app" className="landing-button landing-button-outline">Conhecer a plataforma <Arrow /></a>
+            </div>
           </div>
         </section>
 
-        <section id="como-funciona" className="modules wrap section-space" aria-labelledby="modules-title">
-          <div className="section-intro"><h2 id="modules-title">A conversa continua<br /><span>fora da caixa de ideias.</span></h2><p>Três frentes planejadas para conectar a escuta ao que acontece no colégio.</p></div>
-          <div className="module-list">{modules.map((module) => <article className="module-row" key={module.title}><h3>{module.title}</h3><p>{module.text}</p><span>{module.detail}</span></article>)}</div>
+        <section id="experimente" className="landing-demo-section" aria-labelledby="demo-title">
+          <div className="landing-demo-head">
+            <div><span className="landing-kicker">EXPERIMENTE</span><h2 id="demo-title">E se o recreio tivesse…</h2></div>
+            <p>Escolha um cenário e veja a conversa começar.</p>
+          </div>
+          <ListeningDemo />
+          <p className="landing-demo-note">Experiência ilustrativa.</p>
         </section>
 
-        <section className="closing" aria-labelledby="closing-title">
-          <div className="wrap closing-inner"><div><h2 id="closing-title">O primeiro passo<br />é dar voz.</h2><p>Estamos começando pelo que mais importa: criar um caminho para ouvir os alunos e pensar o lazer junto com o GEF.</p><p className="closing-approval">A direção de comunicação do Grêmio Estudantil Farroupilha aprova a ideia e considera essa escuta essencial para desenvolver atividades de lazer no recreio.</p></div><div className="closing-status"><span className="status"><span aria-hidden="true" /> Projeto em desenvolvimento</span><p>Esta é a apresentação da plataforma.<br />Os espaços de participação chegam nas próximas etapas.</p><a className="button button-light" href="/app">Entrar na plataforma <Arrow /></a></div></div>
+        <section className="landing-closing" aria-labelledby="closing-title">
+          <div className="landing-closing-image-shell">
+            <Image className="landing-closing-image" src="/landing/patio-entardecer.webp" alt="Pátio do colégio ao entardecer com atividades pintadas no chão" fill sizes="100vw" />
+          </div>
+          <div className="landing-closing-inner">
+            <div><span className="landing-kicker">O PRÓXIMO CAPÍTULO</span><h2 id="closing-title">A próxima ideia<br /><em>pode ser sua.</em></h2></div>
+            <div className="landing-closing-action"><p>Entre na plataforma e participe do que vem depois.</p><a href="/app" className="landing-button landing-button-light">Entrar na plataforma <Arrow /></a></div>
+          </div>
         </section>
       </main>
 
-      <footer className="site-footer wrap">
-        <div className="footer-name"><strong>comunica farroupilha</strong><span>Um recreio com a nossa cara.</span></div>
-        <div className="institutional"><Image src="/brand/gef.png" width={48} height={48} alt="GEF — Grêmio Estudantil Farroupilha" /><a href="https://colegiofarroupilha.poa.br/" target="_blank" rel="noopener noreferrer" aria-label="Site do Colégio Farroupilha (abre em nova aba)"><Image src="/brand/farroupilha.png" width={64} height={44} alt="Colégio Farroupilha" /></a></div>
-        <a className="back-top" href="#inicio">Voltar ao início <Arrow diagonal /></a>
+      <footer className="landing-footer">
+        <div className="landing-footer-inner">
+          <div className="landing-footer-brand"><strong>comunica farroupilha</strong><span>Um recreio com a nossa cara.</span></div>
+          <div className="landing-footer-marks"><Image src="/brand/gef.png" width={48} height={48} alt="GEF — Grêmio Estudantil Farroupilha" /><a href="https://colegiofarroupilha.poa.br/" target="_blank" rel="noopener noreferrer" aria-label="Site do Colégio Farroupilha (abre em nova aba)"><Image src="/brand/farroupilha.png" width={64} height={44} alt="Colégio Farroupilha" /></a></div>
+          <a className="landing-back-top" href="#inicio">Voltar ao início <Arrow diagonal /></a>
+        </div>
       </footer>
-    </>
+    </div>
   );
 }

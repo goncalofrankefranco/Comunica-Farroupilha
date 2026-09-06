@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 const shellSource = readFileSync("src/components/gefshell.tsx", "utf8");
 const stylesSource = readFileSync("src/app/globals.css", "utf8");
+const landingSource = readFileSync("src/app/page.tsx", "utf8");
+const listeningDemoSource = readFileSync("src/components/listening-demo.tsx", "utf8");
 
 test("proposal card keeps action controls outside an interactive card button", () => {
   assert.match(shellSource, /<div\s+className="proposal-card-main"/s);
@@ -87,4 +89,26 @@ test("comments return as an attached tab with a calm empty state", () => {
 
 test("app omits the mid-feed institutional banner", () => {
   assert.doesNotMatch(shellSource, /className="institutional-banner"/);
+});
+
+test("landing is led by real school photography", () => {
+  assert.match(landingSource, /className="landing-hero-image"/);
+  assert.match(landingSource, /className="landing-story-image/);
+  assert.match(landingSource, /className="landing-platform-image"/);
+  assert.match(landingSource, /\/landing\/mural-pista\.webp/);
+  assert.match(landingSource, /\/landing\/patio-geral\.webp/);
+  assert.match(landingSource, /\/landing\/corredor-jogos\.webp/);
+});
+
+test("landing removes redundant institutional copy", () => {
+  assert.doesNotMatch(landingSource, /className="institutional-note"/);
+  assert.doesNotMatch(landingSource, /className="closing-approval"/);
+  assert.match(stylesSource, /\.landing-hero/);
+  assert.match(stylesSource, /\.landing-photo-grid/);
+});
+
+test("landing demo keeps its scenario copy concise", () => {
+  assert.doesNotMatch(listeningDemoSource, /Como preservar um espaço tranquilo/);
+  assert.doesNotMatch(listeningDemoSource, /quem ainda não conhece ninguém/);
+  assert.match(listeningDemoSource, /O que você gostaria de ouvir\? Em quais dias\?/);
 });

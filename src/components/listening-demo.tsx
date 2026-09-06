@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Arrow } from "./arrow";
 
 const ideas = [
-  { id: "music", label: "Música e encontros", title: "Uma trilha para o intervalo?", origin: "Uma ideia que poderia vir do GEF", question: "E se a gente experimentasse música em alguns recreios?", feedback: "O que você gostaria de ouvir? Em quais dias? Como preservar um espaço tranquilo para quem prefere silêncio?", next: "Ouvir diferentes preferências, testar um formato viável e perguntar depois como foi." },
-  { id: "games", label: "Jogos e movimento", title: "Cabe uma partida no recreio?", origin: "Uma ideia que poderia vir dos alunos", question: "Que tal ter jogos para juntar a turma no intervalo?", feedback: "Quais jogos combinam com o tempo do recreio? O que ajudaria quem ainda não conhece ninguém a participar?", next: "Consultar os alunos, combinar materiais e espaço com o GEF e avaliar a experiência após o teste." },
-  { id: "quiet", label: "Uma pausa tranquila", title: "Também vale desacelerar.", origin: "Uma experiência que poderia ser compartilhada", question: "E se eu só quiser um lugar tranquilo para conversar ou descansar?", feedback: "O que torna a pausa mais confortável? Há algo no recreio que dificulta esse momento?", next: "Entender as necessidades menos visíveis e considerar essas vozes no planejamento das atividades." },
+  { id: "music", label: "Música", title: "Uma trilha para o intervalo?", origin: "Uma ideia do GEF", question: "E se a gente experimentasse música em alguns recreios?", feedback: "O que você gostaria de ouvir? Em quais dias?", next: "Ouvir, testar e perguntar depois como foi." },
+  { id: "games", label: "Jogos e movimento", title: "Cabe uma partida no recreio?", origin: "Uma ideia dos alunos", question: "Que tal ter jogos para juntar a turma no intervalo?", feedback: "Quais jogos cabem no tempo e no espaço do recreio?", next: "Combinar o teste, abrir para mais gente e avaliar juntos." },
+  { id: "quiet", label: "Uma pausa", title: "Também vale desacelerar.", origin: "Uma experiência compartilhada", question: "E se eu só quiser um lugar tranquilo para conversar ou descansar?", feedback: "O que torna uma pausa mais confortável?", next: "Considerar também quem prefere desacelerar." },
 ];
 
 export function ListeningDemo() {
