@@ -226,102 +226,21 @@ function ProgressSteps({ status }: { status: ProposalStatus }) {
     </div>
   );
 }
-
-const seedProposals: Proposal[] = [
-  { id: "p1", title: "Mais pontos de recarga USB nas áreas comuns", body: "Instalar pontos de recarga USB nas salas de estudo e na biblioteca para que todos possam carregar seus dispositivos durante o dia.", author: "Demonstração Estudante", authorId: "demo", anonymous: false, theme: "Outros", status: "analysis", supports: 14, comments: 2, createdAt: "Há 2 dias", updatedAt: "Há 1 dia", gefResponse: "Estamos levantando custos e locais viáveis junto à coordenação.", gefResponseAt: "Há 1 dia" },
-  { id: "p2", title: "Torneio relâmpago de vôlei no recreio", body: "Organizar partidas curtas com inscrição simples e rodízio de times, para mais gente conseguir jogar durante o intervalo.", author: "Marina Costa", authorId: "marina", anonymous: false, theme: "Esportes", status: "development", supports: 22, comments: 4, createdAt: "Há 3 dias", updatedAt: "Há 4 horas", gefResponse: "Vamos testar a quadra menor no próximo recreio e ouvir quem participar.", gefResponseAt: "Há 1 dia" },
-  { id: "p3", title: "Playlist colaborativa para os intervalos", body: "Criar uma playlist com sugestões dos estudantes e um horário de música escolhido pelo GEF.", author: "Estudante anônimo", authorId: "anonymous-3", anonymous: true, theme: "Música e cultura", status: "received", supports: 10, comments: 3, createdAt: "Há 5 dias", updatedAt: "Há 2 dias" },
-  { id: "p4", title: "Espaço tranquilo para descansar", body: "Reservar uma área com bancos e sombra para quem prefere conversar ou descansar sem participar de uma atividade.", author: "João Pedro", authorId: "joao", anonymous: false, theme: "Descanso", status: "scheduled", supports: 18, comments: 5, createdAt: "Há 1 semana", updatedAt: "Há 1 dia", gefResponse: "Atividade agendada para terça no Pátio das Árvores.", gefResponseAt: "Há 1 dia" },
-  { id: "p5", title: "Jogos de tabuleiro na biblioteca", body: "Disponibilizar jogos rápidos e um sistema de empréstimo durante os intervalos para criar novas opções de convivência.", author: "Estudante anônimo", authorId: "anonymous-5", anonymous: true, theme: "Jogos de mesa", status: "completed", supports: 26, comments: 6, createdAt: "Há 2 semanas", updatedAt: "Ontem", gefResponse: "Jogos implementados com sucesso e disponíveis no balcão da biblioteca.", gefResponseAt: "Ontem" },
-  { id: "p6", title: "Oficina de desenho e colagem no pátio", body: "Montar uma mesa com materiais simples para quem quiser desenhar, criar colagens e compartilhar produções durante o recreio.", author: "Beatriz Lima", authorId: "bia", anonymous: false, theme: "Música e cultura", status: "analysis", supports: 12, comments: 2, createdAt: "Há 4 dias", updatedAt: "Há 6 horas" },
-  { id: "p7", title: "Caixa de trocas de livros e revistas", body: "Criar um ponto de troca voluntária para renovar as leituras e descobrir histórias diferentes sem precisar levar um livro novo.", author: "Estudante anônimo", authorId: "anonymous-7", anonymous: true, theme: "Convivência", status: "received", supports: 9, comments: 1, createdAt: "Há 6 dias", updatedAt: "Há 3 dias" },
-  { id: "p8", title: "Desafio de xadrez relâmpago", body: "Organizar partidas de até dez minutos com um quadro de inscrições aberto a iniciantes e a quem já joga.", author: "Rafael Mendes", authorId: "rafael", anonymous: false, theme: "Jogos de mesa", status: "received", supports: 16, comments: 2, createdAt: "Há 8 dias", updatedAt: "Há 2 dias" },
-];
-
-const seedComments: ProposalComment[] = [
-  { id: "c1", proposalId: "p1", author: "Demonstração Estudante", authorId: "demo", role: "student", anonymous: false, body: "Ótima ideia! Isso ajudaria muito durante os trabalhos em grupo.", createdAt: "Há 1 dia" },
-  { id: "c2", proposalId: "p1", author: "GEF", authorId: "admin", role: "gef", anonymous: false, body: "Estamos levantando custos e locais viáveis. Seguimos em análise e traremos novidades em breve.", createdAt: "Há 1 dia" },
-  { id: "c3", proposalId: "p2", author: "Lívia", authorId: "livia", role: "student", anonymous: false, body: "Dá para usar a quadra menor para não atrapalhar quem está passando?", createdAt: "Há 2 dias" },
-  { id: "c4", proposalId: "p2", author: "GEF", authorId: "admin", role: "gef", anonymous: false, body: "Sim. Vamos testar a quadra menor no próximo recreio e ouvir quem participar.", createdAt: "Há 1 dia" },
-  { id: "c5", proposalId: "p3", author: "Demonstração", authorId: "demo", role: "student", anonymous: false, body: "Também seria legal ter uma opção mais calma para estudar.", createdAt: "Há 3 dias" },
-  { id: "c6", proposalId: "p6", author: "Caio", authorId: "caio", role: "student", anonymous: false, body: "Podemos deixar a mesa perto da biblioteca para proteger os materiais do vento?", createdAt: "Há 1 dia" },
-  { id: "c7", proposalId: "p6", author: "GEF", authorId: "admin", role: "gef", anonymous: false, body: "Boa sugestão. Vamos testar um espaço coberto e uma lista curta de materiais.", createdAt: "Há 10 horas" },
-  { id: "c8", proposalId: "p7", author: "Nina", authorId: "nina", role: "student", anonymous: false, body: "Adorei a ideia para os dias de chuva também.", createdAt: "Há 2 dias" },
-  { id: "c9", proposalId: "p8", author: "GEF", authorId: "admin", role: "gef", anonymous: false, body: "Vamos buscar tabuleiros e testar partidas curtas no próximo ciclo.", createdAt: "Ontem" },
-  { id: "c10", proposalId: "p8", author: "Léo", authorId: "leo", role: "student", anonymous: false, body: "Seria legal ter uma mesa para quem está aprendendo.", createdAt: "Há 2 dias" },
-];
-
-const seedActivities: Activity[] = [
-  { id: "a1", proposalId: "p4", title: "Teste do espaço tranquilo", date: "2026-09-08", time: "10:15–10:35", place: "Pátio das árvores", audience: "Todas as turmas", status: "upcoming" },
-];
-
 const defaultState: DemoState = {
   user: null,
   accounts: [
-    { id: "demo", name: "Demonstração", turma: "Turma A — demonstração", role: "student", password: "demo1234" },
     { id: "admin", name: "administrador", turma: "GEF", role: "gef", password: "admteste123" },
   ],
-  proposals: seedProposals,
-  comments: seedComments,
-  activities: seedActivities,
-  notifications: [
-    { id: "n1", title: "Nova atividade no recreio", body: "O teste do espaço tranquilo acontece na terça, no Pátio das árvores.", createdAt: "Há 2 horas", read: false, activityId: "a1" },
-    { id: "n2", title: "Uma proposta recebeu resposta", body: "O GEF comentou a proposta de pontos de recarga USB.", createdAt: "Ontem", read: false },
-    { id: "n3", title: "A proposta está em análise", body: "A proposta de pontos de recarga avançou de etapa.", createdAt: "Há 2 dias", read: false },
-  ],
-  supportedByUser: {
-    demo: ["p1", "p3"],
-  },
-  savedByUser: {
-    demo: ["p2"],
-  },
+  proposals: [],
+  comments: [],
+  activities: [],
+  notifications: [],
+  supportedByUser: {},
+  savedByUser: {},
   likedCommentsByUser: {},
-  supporters: {
-    p1: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "livia", name: "Lívia", turma: "9º ano" }],
-    p2: [{ id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "rafael", name: "Rafael Mendes", turma: "2º EM" }, { id: "nina", name: "Nina", turma: "7º ano" }],
-    p3: [{ id: "caio", name: "Caio", turma: "9º ano" }, { id: "leo", name: "Léo", turma: "1º EM" }],
-    p4: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "nina", name: "Nina", turma: "7º ano" }],
-    p5: [{ id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "caio", name: "Caio", turma: "9º ano" }],
-    p6: [{ id: "livia", name: "Lívia", turma: "9º ano" }, { id: "leo", name: "Léo", turma: "1º EM" }],
-    p7: [{ id: "nina", name: "Nina", turma: "7º ano" }],
-    p8: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "caio", name: "Caio", turma: "9º ano" }],
-  },
-  activityFeedbacks: {
-    a1: [
-      { id: "af-1", activityId: "a1", userId: "marina", userName: "Marina Costa", turma: "8º ano", participated: true, rating: "great", comment: "Foi muito bom ter um lugar silencioso com sombra!", createdAt: "Há 1 hora" },
-      { id: "af-2", activityId: "a1", userId: "rafael", userName: "Rafael Mendes", turma: "2º EM", participated: false, reasonNotParticipated: "Estava estudando para prova no intervalo", comment: "Gostei da iniciativa, pretendo ir no próximo.", createdAt: "Há 30 min" },
-    ],
-  },
-  chapaQuestions: [
-    {
-      id: "cq-1",
-      chapaId: "chapa-1",
-      proposalArea: "Esportes e movimento",
-      proposalTitle: "Circuito de jogos rápidos",
-      question: "Como será feita a divisão dos horários entre as turmas do Fundamental e Médio?",
-      author: "Caio",
-      authorId: "caio",
-      turma: "9º ano",
-      answer: "Haverá revezamento por dias da semana: segundas e quartas para Fundamental, terças e quintas para Médio, e sextas aberto a todos.",
-      answeredBy: "Chapa 1",
-      answeredAt: "Há 1 dia",
-      createdAt: "Há 2 dias",
-    },
-    {
-      id: "cq-2",
-      chapaId: "chapa-2",
-      proposalArea: "Cultura e música",
-      proposalTitle: "Rádio do intervalo",
-      question: "Quem vai escolher as músicas da rádio para garantir que não haja músicas inadequadas?",
-      author: "Lívia",
-      authorId: "livia",
-      turma: "9º ano",
-      answer: "Teremos uma comissão mista de alunos representantes e o GEF com formulário aberto e diretrizes de respeito mútuo.",
-      answeredBy: "Chapa 2",
-      answeredAt: "Ontem",
-      createdAt: "Há 1 dia",
-    },
-  ],
+  supporters: {},
+  activityFeedbacks: {},
+  chapaQuestions: [],
 };
 
 const seedChapas: Chapa[] = [
@@ -1254,7 +1173,7 @@ function ActivityComposer({ proposals, onCancel, onCreate }: { proposals: Propos
         <SelectMenu
           value={proposalId}
           onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
-          options={list.map((p) => ({ value: p.id, label: p.title }))}
+          options={list.length ? list.map((p) => ({ value: p.id, label: p.title })) : [{ value: "", label: "Nenhuma proposta vinculada (atividade geral)" }]}
           ariaLabel="Proposta de origem da atividade"
           className="select-menu-field"
         />
@@ -1316,7 +1235,7 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
         </form>
         <div className="auth-note">
           <Icon name="info" size={16} />
-          <span>Contas de demonstração pré-configuradas: <strong>Demonstração / demo1234</strong> (estudante) ou <strong>administrador / admteste123</strong> (GEF).</span>
+          <span>Conta administrativa pré-configurada: <strong>administrador / admteste123</strong> (GEF). Novos estudantes podem se cadastrar em <em>Criar conta</em>.</span>
         </div>
       </div>
       <p className="auth-demo-note">Plataforma 100% funcional com persistência e backend ativo</p>
@@ -1327,7 +1246,7 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
 export function GEFShell() {
   const [state, setState] = useState<DemoState>(defaultState);
   const [view, setView] = useState<View>("proposals");
-  const [selectedId, setSelectedId] = useState("p1");
+  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [themeFilter, setThemeFilter] = useState("Todos");
   const [statusFilter, setStatusFilter] = useState<ProposalStatus | "all">("all");
@@ -2123,9 +2042,9 @@ export function GEFShell() {
                 ))}
                 {filteredProposals.length === 0 && (
                   <div className="empty-state">
-                    <Icon name="search" size={26} />
-                    <h3>Nenhuma proposta encontrada</h3>
-                    <p>Tente outra busca ou limpe os filtros.</p>
+                    <Icon name={state.proposals.length === 0 ? "spark" : "search"} size={26} />
+                    <h3>{state.proposals.length === 0 ? "Nenhuma proposta publicada ainda" : "Nenhuma proposta encontrada"}</h3>
+                    <p>{state.proposals.length === 0 ? "Seja o primeiro a compartilhar uma ideia com a comunidade escolar!" : "Tente outra busca ou limpe os filtros."}</p>
                   </div>
                 )}
               </div>
@@ -2399,6 +2318,7 @@ export function GEFShell() {
 
               <div className="map-list">
                 <h3>Propostas no mapa</h3>
+                {state.proposals.length === 0 && <p className="empty-copy">Nenhuma proposta registrada no mapa ainda.</p>}
                 {state.proposals.map((proposal) => (
                   <button key={proposal.id} onClick={() => { setGefProposalId(proposal.id); setSelectedId(proposal.id); }}>
                     <span className="map-list-status" style={{ background: STATUS[proposal.status]?.color ?? "#6c7d8c" }} />

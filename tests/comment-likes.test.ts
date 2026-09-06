@@ -8,7 +8,25 @@ test("comment likes toggle independently for each user", async () => {
   assert.equal(typeof toggleCommentLike, "function", "The platform store should expose comment like toggling.");
   if (!toggleCommentLike) return;
 
-  const comment = storeModule.getPlatformStore().comments[0];
+  let comment = storeModule.getPlatformStore().comments[0];
+  if (!comment) {
+    const prop = storeModule.createProposal({
+      title: "Proposta para teste de curtidas",
+      body: "Corpo do teste de curtidas",
+      author: "Admin",
+      authorId: "admin",
+      anonymous: false,
+      theme: "Outros",
+      origin: "gef",
+    });
+    comment = storeModule.addComment(prop.id, {
+      author: "Aluno Teste",
+      authorId: "aluno_teste",
+      role: "student",
+      anonymous: false,
+      body: "Comentário de teste",
+    })!;
+  }
   const initialLikes = comment.likes ?? 0;
   const liked = toggleCommentLike(comment.id, "comment-like-test-user");
   assert.deepEqual(liked, { liked: true, likes: initialLikes + 1 });
