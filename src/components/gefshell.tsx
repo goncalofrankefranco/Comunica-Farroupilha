@@ -184,7 +184,7 @@ function ProgressSteps({ status }: { status: ProposalStatus }) {
         const current = step === active && status !== "completed";
         return (
           <div className="progress-step" key={label}>
-            <span className={`progress-circle ${done ? "is-done" : ""} ${current ? "is-current" : ""}`} style={done ? { backgroundColor: "#1259a8" } : current ? { borderColor: STATUS[status]?.color, color: STATUS[status]?.color } : undefined}>
+            <span className={`progress-circle ${done ? "is-done" : ""} ${current ? "is-current" : ""}`} style={done ? { backgroundColor: "#0758b1", borderColor: "#0758b1" } : current ? { borderColor: STATUS[status]?.color, color: STATUS[status]?.color } : undefined}>
               {done ? <Icon name="check" size={13} /> : current ? <span /> : null}
             </span>
             <span>{label}</span>
@@ -1887,7 +1887,6 @@ export function GEFShell() {
             <input value={query} onChange={(event) => { setQuery(event.target.value); if (view !== "proposals") setView("proposals"); }} placeholder="Buscar propostas…" aria-label="Buscar propostas" />
           </div>
           <div className="topbar-actions">
-            <button className="top-icon" aria-label="Pesquisar"><Icon name="search" size={20} /></button>
             <button className="top-icon notification-top" onClick={() => changeView("notifications")} aria-label={`Notificações${unread ? `, ${unread} não lidas` : ""}`}>
               <Icon name="bell" size={21} />{unread > 0 && <span>{unread}</span>}
             </button>
