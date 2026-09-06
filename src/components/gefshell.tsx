@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { SelectMenu } from "@/components/select-menu";
 
 type Role = "student" | "gef";
 type View = "proposals" | "saved" | "agenda" | "chapas" | "notifications" | "gef";
@@ -44,6 +45,7 @@ type ProposalComment = {
   body: string;
   createdAt: string;
   parentId?: string;
+  likes?: number;
 };
 
 type Supporter = {
@@ -114,6 +116,7 @@ type DemoState = {
   notifications: Notification[];
   supportedByUser: Record<string, string[]>;
   savedByUser: Record<string, string[]>;
+  likedCommentsByUser: Record<string, string[]>;
   supporters: Record<string, Supporter[]>;
   activityFeedbacks: Record<string, ActivityFeedback[]>;
   chapaQuestions: ChapaQuestion[];
@@ -163,9 +166,38 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
   );
 }
 
+type TactileAction = "support" | "save" | `like:${string}`;
+
+function useTactileCommit() {
+  const [committingAction, setCommittingAction] = useState<TactileAction | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => {
+    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+  }, []);
+
+  function run(action: TactileAction, callback: () => void) {
+    setCommittingAction(action);
+    callback();
+    if (timerRef.current !== undefined) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCommittingAction(null), 360);
+  }
+
+  return { committingAction, run };
+}
+
 function Avatar({ name, role, small = false }: { name: string; role?: Role; small?: boolean }) {
   const initials = role === "gef" ? "GEF" : name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   return <span className={`avatar ${role === "gef" ? "avatar-gef" : ""} ${small ? "avatar-small" : ""}`} aria-hidden="true">{initials}</span>;
+}
+
+function ProfileMenu({ onLogout, onReset }: { onLogout: () => void; onReset: () => void }) {
+  return (
+    <div className="profile-menu">
+      <button type="button" onClick={onLogout}><Icon name="logout" size={16} />Sair</button>
+      <button type="button" onClick={onReset}><Icon name="refresh" size={16} />Restaurar dados</button>
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: ProposalStatus }) {
@@ -184,7 +216,7 @@ function ProgressSteps({ status }: { status: ProposalStatus }) {
         const current = step === active && status !== "completed";
         return (
           <div className="progress-step" key={label}>
-            <span className={`progress-circle ${done ? "is-done" : ""} ${current ? "is-current" : ""}`} style={done ? { backgroundColor: "#1259a8" } : current ? { borderColor: STATUS[status]?.color, color: STATUS[status]?.color } : undefined}>
+            <span className={`progress-circle ${done ? "is-done" : ""} ${current ? "is-current" : ""}`} style={done ? { backgroundColor: "#0758b1", borderColor: "#0758b1" } : current ? { borderColor: STATUS[status]?.color, color: STATUS[status]?.color } : undefined}>
               {done ? <Icon name="check" size={13} /> : current ? <span /> : null}
             </span>
             <span>{label}</span>
@@ -243,6 +275,7 @@ const defaultState: DemoState = {
   savedByUser: {
     demo: ["p2"],
   },
+  likedCommentsByUser: {},
   supporters: {
     p1: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "livia", name: "Lívia", turma: "9º ano" }],
     p2: [{ id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "rafael", name: "Rafael Mendes", turma: "2º EM" }, { id: "nina", name: "Nina", turma: "7º ano" }],
@@ -368,14 +401,16 @@ function ChapasView({
         ))}
       </div>
       <div className="chapa-toolbar">
-        <label>
+        <div className="chapa-toolbar-control">
           <span>Área</span>
-          <select value={area} onChange={(event) => setArea(event.target.value)}>
-            <option>Todas</option>
-            {CHAPA_AREAS.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <Icon name="chevron" size={14} />
-        </label>
+          <SelectMenu
+            value={area}
+            onChange={setArea}
+            options={["Todas", ...CHAPA_AREAS].map((item) => ({ value: item, label: item }))}
+            ariaLabel="Filtrar propostas da chapa por área"
+            className="select-menu-chapa"
+          />
+        </div>
         <span className="chapa-count">{proposals.length} {proposals.length === 1 ? "proposta" : "propostas"}</span>
       </div>
       <article className="chapa-profile" style={{ "--chapa-color": chapa.color } as React.CSSProperties}>
@@ -494,9 +529,12 @@ function ProposalCard({
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
 }) {
+  const { committingAction, run } = useTactileCommit();
+
   return (
     <article className={`proposal-card ${selected ? "is-selected" : ""}`}>
-      <button className="proposal-card-main" onClick={onSelect} aria-expanded={selected}>
+      <div className="proposal-card-main">
+        <button type="button" className="proposal-card-select" onClick={onSelect} aria-expanded={selected} aria-controls={`proposal-detail-${proposal.id}`}>
         <div className="proposal-card-top">
           <StatusBadge status={proposal.status} />
           {proposal.origin === "gef" && <span className="gef-origin-tag"><Icon name="spark" size={13} /> Consulta do GEF</span>}
@@ -509,6 +547,7 @@ function ProposalCard({
           </div>
           {selected && <ProgressSteps status={proposal.status} />}
         </div>
+        </button>
         <div className="proposal-card-meta">
           <span className="author-meta">
             <Avatar name={proposal.origin === "gef" ? "GEF" : proposal.anonymous ? "EA" : proposal.author} role={proposal.origin === "gef" ? "gef" : undefined} small />
@@ -518,15 +557,17 @@ function ProposalCard({
             </span>
           </span>
           <span className="support-count"><Icon name="users" size={19} /><span><strong>{proposal.supports}</strong><small>Apoios</small></span></span>
-          <span className="comment-count"><Icon name="message" size={18} /> {proposal.comments}</span>
-          <span className={`support-button ${supported ? "is-supported" : ""}`} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onSupport(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSupport(); } }}>
+          <button type="button" className="comment-count tactile-control" aria-label={`Abrir comentários da proposta (${proposal.comments})`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
+            <Icon name="message" size={18} /> {proposal.comments}
+          </button>
+          <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); run("support", onSupport); }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
-          </span>
-          <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); onSave(); }}>
+          </button>
+          <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); run("save", onSave); }}>
             <Icon name="bookmark" size={18} />
           </button>
         </div>
-      </button>
+      </div>
 
       {isGef && selected && (
         <div className="gef-card-actions">
@@ -547,15 +588,20 @@ function CommentThread({
   proposalId,
   user,
   onComment,
+  onLike,
+  likedCommentIds,
 }: {
   comments: ProposalComment[];
   proposalId: string;
   user: User;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
 }) {
   const [body, setBody] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const roots = comments.filter((comment) => comment.proposalId === proposalId && !comment.parentId);
+  const { committingAction, run } = useTactileCommit();
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -568,11 +614,16 @@ function CommentThread({
   return (
     <section className="comments-section" aria-labelledby="comments-title">
       <div className="comments-heading">
-        <h3 id="comments-title">Comentários ({comments.filter((comment) => comment.proposalId === proposalId).length})</h3>
-        <span>Conversa aberta para a comunidade</span>
+        <span className="comments-heading-mark"><Icon name="message" size={16} /></span>
+        <div className="comments-heading-copy">
+          <h3 id="comments-title">Comentários ({comments.filter((comment) => comment.proposalId === proposalId).length})</h3>
+          <span>Conversa aberta para a comunidade</span>
+        </div>
       </div>
       <div className="comment-list">
-        {roots.map((comment) => (
+        {roots.map((comment) => {
+          const liked = likedCommentIds.includes(comment.id);
+          return (
           <div className="comment-group" key={comment.id}>
             <div className={`comment ${comment.role === "gef" ? "comment-gef" : ""}`}>
               <Avatar name={comment.anonymous ? "EA" : comment.author} role={comment.role} />
@@ -583,9 +634,20 @@ function CommentThread({
                   <small>{comment.createdAt}</small>
                 </div>
                 <p>{comment.body}</p>
-                <button className="reply-link" onClick={() => setBody(`@${comment.anonymous ? "estudante" : comment.author} `)}>
-                  Responder <span><Icon name="thumbs" size={14} /> 1</span>
-                </button>
+                <div className="comment-actions">
+                  <button type="button" className="reply-link" onClick={() => setBody(`@${comment.anonymous ? "estudante" : comment.author} `)}>
+                    Responder
+                  </button>
+                  <button
+                    type="button"
+                    className={`comment-like-button tactile-control ${liked ? "is-liked" : ""} ${committingAction === `like:${comment.id}` ? "is-committing" : ""}`}
+                    aria-pressed={liked}
+                    aria-label={liked ? "Descurtir comentário" : "Curtir comentário"}
+                    onClick={() => run(`like:${comment.id}`, () => onLike(comment.id))}
+                  >
+                    <Icon name="thumbs" size={14} /> {comment.likes ?? 0}
+                  </button>
+                </div>
               </div>
             </div>
             {comments.filter((reply) => reply.parentId === comment.id).map((reply) => (
@@ -601,8 +663,15 @@ function CommentThread({
               </div>
             ))}
           </div>
-        ))}
-        {roots.length === 0 && <p className="empty-copy">Ainda não há comentários. Comece a conversa.</p>}
+          );
+        })}
+        {roots.length === 0 && (
+          <div className="comments-empty-state">
+            <span className="comments-empty-icon"><Icon name="message" size={18} /></span>
+            <strong>A conversa começa aqui.</strong>
+            <p>Compartilhe uma ideia ou responda à conversa para continuar a escuta.</p>
+          </div>
+        )}
       </div>
       <form className="comment-composer" onSubmit={submit}>
         <Avatar name={user.name} role={user.role} small />
@@ -654,8 +723,10 @@ function ProposalDetail({
   comments,
   supporters,
   user,
-  isGef,
   onComment,
+  onLike,
+  likedCommentIds,
+  isGef,
   onSubmitGefResponse,
 }: {
   proposal: Proposal;
@@ -664,15 +735,13 @@ function ProposalDetail({
   user: User;
   isGef: boolean;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
 }) {
-  const [showGefReply, setShowGefReply] = useState(true);
   const [editingGefResponse, setEditingGefResponse] = useState(false);
   const [gefResponseText, setGefResponseText] = useState(proposal.gefResponse ?? "");
   const [savingResponse, setSavingResponse] = useState(false);
-
-  const gefReplies = comments.filter((comment) => comment.proposalId === proposal.id && comment.role === "gef");
-  const latestGefReply = gefReplies[gefReplies.length - 1];
 
   async function handleSaveGefResponse() {
     if (!onSubmitGefResponse || !gefResponseText.trim()) return;
@@ -683,24 +752,17 @@ function ProposalDetail({
   }
 
   return (
-    <div className="detail-grid">
-      <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} />
+    <div className="detail-grid" id={`proposal-detail-${proposal.id}`}>
+      <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
       <div className="detail-side">
         <SupportersPanel supporters={supporters} total={proposal.supports} />
-        <aside className="how-card">
-          <span className="how-icon"><Icon name="info" size={22} /></span>
-          <h3>{isGef ? "Visão do GEF" : "Como funciona?"}</h3>
-          <p>{isGef ? "Acompanhe a conversa, dê um retorno e mova a ideia para o próximo passo." : "As propostas são analisadas pelo GEF e podem virar atividades no recreio."}</p>
-
-          {proposal.gefResponse && (
-            <div className="gef-response-preview">
-              <span className="mini-label">RESPOSTA E JUSTIFICATIVA DO GEF</span>
-              <p>{proposal.gefResponse}</p>
-              <small>{proposal.gefResponseAt}</small>
+        {isGef && onSubmitGefResponse && (
+          <div className="gef-response-tools" aria-label="Resposta oficial do GEF">
+            <div className="gef-response-tools-head">
+              <span className="mini-label">RETORNO OFICIAL DO GEF</span>
+              {proposal.gefResponse && <span className="response-status">Publicado</span>}
             </div>
-          )}
-
-          {isGef && onSubmitGefResponse && (
+            {proposal.gefResponse && <p className="gef-response-tools-copy">{proposal.gefResponse}</p>}
             <div className="gef-response-manager">
               {editingGefResponse ? (
                 <div className="response-editor">
@@ -716,22 +778,8 @@ function ProposalDetail({
                 </button>
               )}
             </div>
-          )}
-
-          {!proposal.gefResponse && (
-            <>
-              <button type="button" className="learn-more-button" onClick={() => setShowGefReply((current) => !current)}>
-                {showGefReply ? "Ocultar comentários do GEF" : "Ver comentários do GEF"} <Icon name="arrow" size={14} />
-              </button>
-              {showGefReply && (
-                <div className="gef-response-preview">
-                  <span className="mini-label">ÚLTIMO RETORNO DO GEF</span>
-                  <p>{latestGefReply?.body ?? "O GEF ainda não respondeu esta proposta. Acompanhe os comentários para ver as próximas atualizações."}</p>
-                </div>
-              )}
-            </>
-          )}
-        </aside>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -749,6 +797,8 @@ function ProposalPreview({
   onSave,
   onStatus,
   onComment,
+  onLike,
+  likedCommentIds,
   onSubmitGefResponse,
   onClose,
 }: {
@@ -763,9 +813,13 @@ function ProposalPreview({
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { committingAction, run } = useTactileCommit();
+
   return (
     <section className="context-proposal" aria-labelledby={`context-proposal-${proposal.id}`}>
       <div className="context-proposal-head">
@@ -782,14 +836,14 @@ function ProposalPreview({
         <span>{proposal.theme}</span>
         <span>{proposal.supports} apoios</span>
         <span>{proposal.comments} comentários</span>
-        <button type="button" className={`support-button ${supported ? "is-supported" : ""}`} onClick={onSupport}>
+        <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={() => run("support", onSupport)}>
           <Icon name="thumbs" size={17} />{supported ? "Apoiado" : "Apoiar"}
         </button>
-        <button type="button" className={`save-button ${saved ? "is-saved" : ""}`} onClick={onSave} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
+        <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} onClick={() => run("save", onSave)} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
           <Icon name="bookmark" size={17} />{saved ? "Acompanhando" : "Acompanhar"}
         </button>
       </div>
-      <ProposalDetail proposal={proposal} comments={comments} supporters={supporters} user={user} isGef={isGef} onComment={onComment} onSubmitGefResponse={onSubmitGefResponse} />
+      <ProposalDetail proposal={proposal} comments={comments} supporters={supporters} user={user} isGef={isGef} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} onSubmitGefResponse={onSubmitGefResponse} />
       {isGef && (
         <div className="context-proposal-actions">
           <span><Icon name="spark" size={15} /> Ações do GEF</span>
@@ -831,9 +885,27 @@ function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => vo
       <label>Título<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Mais jogos para jogar em grupo" maxLength={120} /></label>
       <label>Sua proposta<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="O que acontece hoje? Qual mudança você gostaria de experimentar?" rows={6} maxLength={3000} /></label>
       <div className="form-row">
-        <label>Tema<select value={theme} onChange={(event) => setTheme(event.target.value)}>{THEMES.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <div className="form-field">
+          <span className="form-field-label">Tema</span>
+          <SelectMenu
+            value={theme}
+            onChange={setTheme}
+            options={THEMES.map((item) => ({ value: item, label: item }))}
+            ariaLabel="Tema da proposta"
+            className="select-menu-field"
+          />
+        </div>
         {!isGef ? (
-          <label className="visibility-select">Autoria<select value={anonymous ? "anonymous" : "named"} onChange={(event) => setAnonymous(event.target.value === "anonymous")}><option value="named">Publicar com meu nome</option><option value="anonymous">Publicar anonimamente</option></select></label>
+          <div className="form-field visibility-select">
+            <span className="form-field-label">Autoria</span>
+            <SelectMenu
+              value={anonymous ? "anonymous" : "named"}
+              onChange={(value) => setAnonymous(value === "anonymous")}
+              options={[{ value: "named", label: "Publicar com meu nome" }, { value: "anonymous", label: "Publicar anonimamente" }]}
+              ariaLabel="Visibilidade da autoria"
+              className="select-menu-field"
+            />
+          </div>
         ) : (
           <label>Autoria<input value="Grêmio Estudantil Farroupilha" disabled /></label>
         )}
@@ -922,10 +994,13 @@ function ActivityFeedbackModal({
           ) : (
             <div className="feedback-question">
               <label className="question-title">Qual foi o motivo de não participar?</label>
-              <select value={reason} onChange={(e) => setReason(e.target.value)} required>
-                <option value="">Selecione o motivo principal...</option>
-                {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <SelectMenu
+                value={reason}
+                onChange={setReason}
+                options={[{ value: "", label: "Selecione o motivo principal..." }, ...REASONS.map((item) => ({ value: item, label: item }))]}
+                ariaLabel="Motivo de não participação"
+                className="select-menu-field"
+              />
             </div>
           )}
 
@@ -1174,12 +1249,16 @@ function ActivityComposer({ proposals, onCancel, onCreate }: { proposals: Propos
         </div>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="Fechar agenda"><Icon name="close" size={20} /></button>
       </div>
-      <label>
-        Proposta de origem
-        <select value={proposalId} onChange={(event) => { setProposalId(event.target.value); const p = list.find((item) => item.id === event.target.value); if (p) setTitle(p.title); }}>
-          {list.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-        </select>
-      </label>
+      <div className="form-field">
+        <span className="form-field-label">Proposta de origem</span>
+        <SelectMenu
+          value={proposalId}
+          onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
+          options={list.map((p) => ({ value: p.id, label: p.title }))}
+          ariaLabel="Proposta de origem da atividade"
+          className="select-menu-field"
+        />
+      </div>
       <label>Título da atividade<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       <div className="form-row">
         <label>Data<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
@@ -1258,7 +1337,7 @@ export function GEFShell() {
   const [agendaMonthKey, setAgendaMonthKey] = useState("2026-09");
   const [agendaProposalId, setAgendaProposalId] = useState<string | null>(null);
   const [gefProposalId, setGefProposalId] = useState<string | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState<"sidebar" | "topbar" | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [evaluatingActivity, setEvaluatingActivity] = useState<Activity | null>(null);
   const [summaryActivity, setSummaryActivity] = useState<Activity | null>(null);
@@ -1280,6 +1359,7 @@ export function GEFShell() {
             supporters: parsed.supporters ?? curr.supporters,
             supportedByUser: parsed.supportedByUser ?? curr.supportedByUser,
             savedByUser: parsed.savedByUser ?? curr.savedByUser,
+            likedCommentsByUser: parsed.likedCommentsByUser ?? curr.likedCommentsByUser,
             activityFeedbacks: parsed.activityFeedbacks ?? curr.activityFeedbacks,
             chapaQuestions: parsed.chapaQuestions ?? curr.chapaQuestions,
           }));
@@ -1311,6 +1391,7 @@ export function GEFShell() {
               supporters: p.supportersByProposal ?? curr.supporters,
               supportedByUser: p.supportedByUser ?? curr.supportedByUser,
               savedByUser: p.savedByUser ?? curr.savedByUser,
+              likedCommentsByUser: p.likedCommentsByUser ?? curr.likedCommentsByUser,
               activityFeedbacks: p.activityFeedbacks ?? curr.activityFeedbacks,
               chapaQuestions: p.chapaQuestions ?? curr.chapaQuestions,
             }));
@@ -1359,6 +1440,11 @@ export function GEFShell() {
     if (!user) return [];
     return state.savedByUser?.[user.id] ?? [];
   }, [user, state.savedByUser]);
+
+  const userLikedCommentIds = useMemo(() => {
+    if (!user) return [];
+    return state.likedCommentsByUser?.[user.id] ?? [];
+  }, [user, state.likedCommentsByUser]);
 
   const selected = state.proposals.find((proposal) => proposal.id === selectedId) ?? filteredProposals[0] ?? state.proposals[0];
   const savedProposals = useMemo(() => {
@@ -1464,72 +1550,83 @@ export function GEFShell() {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {}
     setState((curr) => ({ ...curr, user: null }));
-    setProfileOpen(false);
+    setProfileOpen(null);
   }
 
   function changeView(next: View) {
     setView(next);
-    setProfileOpen(false);
+    setProfileOpen(null);
     setComposerOpen(false);
     setActivityOpen(false);
   }
 
   async function toggleSupport(id: string) {
     if (!user) return;
-    try {
-      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
-      const data = await res.json();
-      const currentSupported = userSupportedIds.includes(id);
-      const supported = data.data ? data.data.supported : !currentSupported;
-      const totalSupports = data.data ? data.data.supports : undefined;
+    const currentUser = user;
+    const wasSupported = userSupportedIds.includes(id);
+    const previousSupports = state.proposals.find((proposal) => proposal.id === id)?.supports ?? 0;
+    const optimisticSupported = !wasSupported;
+
+    function applySupportState(supported: boolean, totalSupports: number) {
       setState((curr) => {
-        const userSupports = curr.supportedByUser?.[user.id] ?? [];
+        const userSupports = curr.supportedByUser?.[currentUser.id] ?? [];
         const nextUserSupports = supported
           ? (userSupports.includes(id) ? userSupports : [...userSupports, id])
           : userSupports.filter((item) => item !== id);
-
         const currentSupporters = curr.supporters[id] ?? [];
         const nextSupporters = supported
-          ? (currentSupporters.some((s) => s.id === user.id) ? currentSupporters : [...currentSupporters, { id: user.id, name: user.name, turma: user.turma }])
-          : currentSupporters.filter((s) => s.id !== user.id);
-
+          ? (currentSupporters.some((supporter) => supporter.id === currentUser.id) ? currentSupporters : [...currentSupporters, { id: currentUser.id, name: currentUser.name, turma: currentUser.turma }])
+          : currentSupporters.filter((supporter) => supporter.id !== currentUser.id);
         return {
           ...curr,
-          supportedByUser: {
-            ...curr.supportedByUser,
-            [user.id]: nextUserSupports,
-          },
+          supportedByUser: { ...curr.supportedByUser, [currentUser.id]: nextUserSupports },
           supporters: { ...curr.supporters, [id]: nextSupporters },
-          proposals: curr.proposals.map((p) => p.id === id ? { ...p, supports: totalSupports !== undefined ? totalSupports : Math.max(0, p.supports + (supported ? 1 : -1)) } : p),
+          proposals: curr.proposals.map((proposal) => proposal.id === id ? { ...proposal, supports: totalSupports } : proposal),
         };
       });
+    }
+
+    applySupportState(optimisticSupported, Math.max(0, previousSupports + (optimisticSupported ? 1 : -1)));
+
+    try {
+      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o apoio.");
+      const supported = typeof data.data?.supported === "boolean" ? data.data.supported : optimisticSupported;
+      const totalSupports = typeof data.data?.supports === "number" ? data.data.supports : previousSupports + (supported ? 1 : -1);
+      applySupportState(supported, Math.max(0, totalSupports));
     } catch (err) {
+      applySupportState(wasSupported, previousSupports);
       console.error(err);
     }
   }
 
   async function toggleSaved(id: string) {
     if (!user) return;
-    try {
-      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
-      const data = await res.json();
-      const currentSaved = userSavedIds.includes(id);
-      const saved = data.data ? data.data.saved : !currentSaved;
+    const currentUser = user;
+    const wasSaved = userSavedIds.includes(id);
+    const optimisticSaved = !wasSaved;
+
+    function applySavedState(saved: boolean) {
       setState((curr) => {
-        const userSaved = curr.savedByUser?.[user.id] ?? [];
+        const userSaved = curr.savedByUser?.[currentUser.id] ?? [];
         const nextUserSaved = saved
           ? (userSaved.includes(id) ? userSaved : [...userSaved, id])
           : userSaved.filter((item) => item !== id);
-
-        return {
-          ...curr,
-          savedByUser: {
-            ...curr.savedByUser,
-            [user.id]: nextUserSaved,
-          },
-        };
+        return { ...curr, savedByUser: { ...curr.savedByUser, [currentUser.id]: nextUserSaved } };
       });
+    }
+
+    applySavedState(optimisticSaved);
+
+    try {
+      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o acompanhamento.");
+      const saved = typeof data.data?.saved === "boolean" ? data.data.saved : optimisticSaved;
+      applySavedState(saved);
     } catch (err) {
+      applySavedState(wasSaved);
       console.error(err);
     }
   }
@@ -1662,6 +1759,42 @@ export function GEFShell() {
         ],
       }));
     } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function toggleCommentLike(commentId: string) {
+    if (!user) return;
+    const currentUser = user;
+    const wasLiked = userLikedCommentIds.includes(commentId);
+    const previousLikes = state.comments.find((comment) => comment.id === commentId)?.likes ?? 0;
+    const optimisticLiked = !wasLiked;
+
+    function applyLikeState(liked: boolean, likes: number) {
+      setState((curr) => {
+        const currentIds = curr.likedCommentsByUser?.[currentUser.id] ?? [];
+        const nextIds = liked
+          ? (currentIds.includes(commentId) ? currentIds : [...currentIds, commentId])
+          : currentIds.filter((id) => id !== commentId);
+        return {
+          ...curr,
+          likedCommentsByUser: { ...curr.likedCommentsByUser, [currentUser.id]: nextIds },
+          comments: curr.comments.map((comment) => comment.id === commentId ? { ...comment, likes } : comment),
+        };
+      });
+    }
+
+    applyLikeState(optimisticLiked, Math.max(0, previousLikes + (optimisticLiked ? 1 : -1)));
+
+    try {
+      const res = await fetch(`/api/comments/${commentId}/like`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar a curtida.");
+      const liked = typeof data.data?.liked === "boolean" ? data.data.liked : optimisticLiked;
+      const likes = typeof data.data?.likes === "number" ? data.data.likes : previousLikes + (liked ? 1 : -1);
+      applyLikeState(liked, Math.max(0, likes));
+    } catch (err) {
+      applyLikeState(wasLiked, previousLikes);
       console.error(err);
     }
   }
@@ -1826,7 +1959,7 @@ export function GEFShell() {
     window.localStorage.removeItem("gremio-comunica-demo");
     setState(defaultState);
     setView("proposals");
-    setProfileOpen(false);
+    setProfileOpen(null);
   }
 
   if (!authReady) {
@@ -1859,21 +1992,16 @@ export function GEFShell() {
           </button>
           {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Icon name="grid" size={20} />Visão do GEF</button>}
         </nav>
-        <button className="sidebar-create" onClick={() => { setComposerOpen(true); setView("proposals"); }}>
+        <button className="sidebar-create tactile-control" onClick={() => { setComposerOpen(true); setView("proposals"); }}>
           <Icon name="plus" size={21} />{isGef ? "Criar consulta" : "Criar proposta"}
         </button>
         <div className="profile-wrap">
-          <button className="profile-button" onClick={() => setProfileOpen((open) => !open)}>
+          <button className="profile-button" onClick={() => setProfileOpen((open) => open === "sidebar" ? null : "sidebar")}>
             <Avatar name={user.name} role={user.role} />
             <span><strong>{user.name}</strong><small>{isGef ? "Administrador GEF" : user.turma}</small></span>
             <Icon name="chevron" size={17} />
           </button>
-          {profileOpen && (
-            <div className="profile-menu">
-              <button onClick={logout}><Icon name="logout" size={16} />Sair</button>
-              <button onClick={resetDemo}><Icon name="refresh" size={16} />Restaurar dados</button>
-            </div>
-          )}
+          {profileOpen === "sidebar" && <ProfileMenu onLogout={logout} onReset={resetDemo} />}
         </div>
       </aside>
 
@@ -1887,13 +2015,15 @@ export function GEFShell() {
             <input value={query} onChange={(event) => { setQuery(event.target.value); if (view !== "proposals") setView("proposals"); }} placeholder="Buscar propostas…" aria-label="Buscar propostas" />
           </div>
           <div className="topbar-actions">
-            <button className="top-icon" aria-label="Pesquisar"><Icon name="search" size={20} /></button>
             <button className="top-icon notification-top" onClick={() => changeView("notifications")} aria-label={`Notificações${unread ? `, ${unread} não lidas` : ""}`}>
               <Icon name="bell" size={21} />{unread > 0 && <span>{unread}</span>}
             </button>
-            <button className="top-avatar" onClick={() => setProfileOpen((open) => !open)} aria-label="Abrir menu do perfil">
-              <Avatar name={user.name} role={user.role} small />
-            </button>
+            <div className="topbar-profile-wrap">
+              <button className="top-avatar" onClick={() => setProfileOpen((open) => open === "topbar" ? null : "topbar")} aria-label="Abrir menu do perfil">
+                <Avatar name={user.name} role={user.role} small />
+              </button>
+              {profileOpen === "topbar" && <ProfileMenu onLogout={logout} onReset={resetDemo} />}
+            </div>
           </div>
         </header>
 
@@ -1910,11 +2040,6 @@ export function GEFShell() {
                   <Image className="welcome-logo" src="/brand/gremio-comunica.webp" alt="Logo Comunica Farroupilha" width={180} height={120} priority />
                 </div>
               </section>
-              <p className="institutional-banner">
-                <Icon name="check" size={16} />
-                <span>A direção de comunicação do Grêmio Estudantil Farroupilha já aprova esta ideia e considera essencial desenvolver atividades de lazer no recreio.</span>
-              </p>
-
               {composerOpen && <Composer user={user} onCancel={() => setComposerOpen(false)} onCreate={createProposal} />}
 
               <section className="content-heading">
@@ -1922,7 +2047,7 @@ export function GEFShell() {
                   <h2>Propostas da comunidade</h2>
                   <p>Veja, apoie e comente ideias criadas por estudantes e consultas abertas pelo GEF.</p>
                 </div>
-                <button className="primary-button heading-action" onClick={() => setComposerOpen(true)}>
+                <button className="primary-button heading-action tactile-control" onClick={() => setComposerOpen(true)}>
                   <Icon name="plus" size={17} />{isGef ? "Criar consulta" : "Criar proposta"}
                 </button>
               </section>
@@ -1935,29 +2060,35 @@ export function GEFShell() {
                 <label className="select-filter">
                   <Icon name="grid" size={16} />
                   <span className="filter-label">Tema:</span>
-                  <select value={themeFilter} onChange={(event) => setThemeFilter(event.target.value)}>
-                    <option>Todos</option>
-                    {THEMES.map((theme) => <option key={theme}>{theme}</option>)}
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={themeFilter}
+                    onChange={setThemeFilter}
+                    options={["Todos", ...THEMES].map((item) => ({ value: item, label: item }))}
+                    ariaLabel="Filtrar propostas por tema"
+                    className="select-menu-inline"
+                  />
                 </label>
                 <label className="select-filter">
                   <span className="status-filter-dot" />
                   <span className="filter-label">Situação:</span>
-                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ProposalStatus | "all")}>
-                    <option value="all">Todas</option>
-                    {Object.entries(STATUS).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as ProposalStatus | "all")}
+                    options={[{ value: "all", label: "Todas" }, ...Object.entries(STATUS).map(([key, item]) => ({ value: key, label: item.label }))]}
+                    ariaLabel="Filtrar propostas por situação"
+                    className="select-menu-inline"
+                  />
                 </label>
                 <label className="select-filter sort-filter">
                   <Icon name="filter" size={16} />
                   <span className="filter-label">Ordenar:</span>
-                  <select value={sort} onChange={(event) => setSort(event.target.value as "recent" | "supports")}>
-                    <option value="recent">Mais recentes</option>
-                    <option value="supports">Mais apoiadas</option>
-                  </select>
-                  <Icon name="chevron" size={14} />
+                  <SelectMenu
+                    value={sort}
+                    onChange={(value) => setSort(value as "recent" | "supports")}
+                    options={[{ value: "recent", label: "Mais recentes" }, { value: "supports", label: "Mais apoiadas" }]}
+                    ariaLabel="Ordenar propostas"
+                    className="select-menu-inline"
+                  />
                 </label>
               </div>
 
@@ -1983,6 +2114,8 @@ export function GEFShell() {
                         user={user}
                         isGef={isGef}
                         onComment={addComment}
+                        onLike={toggleCommentLike}
+                        likedCommentIds={userLikedCommentIds}
                         onSubmitGefResponse={submitGefResponse}
                       />
                     )}
@@ -2040,6 +2173,8 @@ export function GEFShell() {
                           user={user}
                           isGef={isGef}
                           onComment={addComment}
+                          onLike={toggleCommentLike}
+                          likedCommentIds={userLikedCommentIds}
                           onSubmitGefResponse={submitGefResponse}
                         />
                       )}
@@ -2157,6 +2292,8 @@ export function GEFShell() {
                   onSave={() => toggleSaved(agendaProposal.id)}
                   onStatus={(status) => changeStatus(agendaProposal.id, status)}
                   onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, agendaProposal.id)}
+                  onLike={toggleCommentLike}
+                  likedCommentIds={userLikedCommentIds}
                   onSubmitGefResponse={submitGefResponse}
                   onClose={() => setAgendaProposalId(null)}
                 />
@@ -2285,6 +2422,8 @@ export function GEFShell() {
                   onSave={() => toggleSaved(gefProposal.id)}
                   onStatus={(status) => changeStatus(gefProposal.id, status)}
                   onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, gefProposal.id)}
+                  onLike={toggleCommentLike}
+                  likedCommentIds={userLikedCommentIds}
                   onSubmitGefResponse={submitGefResponse}
                   onClose={() => setGefProposalId(null)}
                 />

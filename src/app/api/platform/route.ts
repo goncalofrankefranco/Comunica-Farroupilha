@@ -13,6 +13,7 @@ export async function GET() {
       supportersByProposal: store.supportersByProposal,
       supportedByUser: store.supportedByUser,
       savedByUser: store.savedByUser,
+      likedCommentsByUser: store.likedCommentsByUser,
       chapas: store.chapas,
       activityFeedbacks: store.activityFeedbacks,
       chapaQuestions: store.chapaQuestions,

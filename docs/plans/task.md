@@ -1,9 +1,6 @@
 | Task | Status | Notes |
 | --- | --- | --- |
-| Task 1: Expansão do Modelo de Dados, Store e Persistência | done | Tipos expandidos, persistência atômica em disco, feedbacks e dúvidas adicionados |
-| Task 2: Novos e Aprimorados Endpoints de Backend | done | /api/auth/me, justificativas GEF, feedback de atividades, dúvidas chapas implementados |
-| Task 3: Correção de Bugs de Sincronização e Integração no Frontend | done | Sincronizado com /api/auth/me e /api/platform, IDs reais do servidor preservados |
-| Task 4: Avaliação de Atividades Pós-Recreio na Interface | done | Modal e fluxo de feedback para estudantes e resumo estatístico para o GEF |
-| Task 5: Canal de Dúvidas sobre Propostas das Chapas | done | Formulário de dúvidas por área temática e respostas do GEF/Chapas |
-| Task 6: Testes Automatizados e Verificação Rigorosa | done | typecheck, lint, build e suite de testes com Node test runner aprovados |
-| Task 7: Push para o GitHub e Verificação | done | Push concluído com sucesso para branch feature/plataforma-completa no remoto pessoal |
+| Task 1: Tokens Globais, Materiais e Microinterações Táteis no CSS | done | globals.css modernizado com tokens Apple, frosted glass, active scale(0.975), pills |
+| Task 2: Refinamento de Componentes e Layout no GEFShell | done | gefshell.tsx refinado com alinhamento das cores institucionais e topbar limpa |
+| Task 3: Verificação Automatizada Completa | done | typecheck, lint, build e 5/5 testes da platform-store aprovados |
+| Task 4: Push para Avaliação na Branch Dedicada | done | Push com sucesso para pessoal/feature/apple-design-ui para preview na Vercel |
