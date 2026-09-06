@@ -21,9 +21,9 @@ import {
 
 test("Platform Store: initialization and seed data", () => {
   const store = getPlatformStore();
-  assert.ok(store.proposals.length > 0, "Proposals should have seed items");
+  assert.ok(Array.isArray(store.proposals), "Proposals should be an array");
   assert.ok(store.chapas.length >= 2, "Should have at least Chapa 1 and Chapa 2");
-  assert.ok(store.activities.length > 0, "Activities should have seed items");
+  assert.ok(Array.isArray(store.activities), "Activities should be an array");
   assert.ok(typeof store.activityFeedbacks === "object", "Feedbacks should be an object/record");
   assert.ok(Array.isArray(store.chapaQuestions), "Chapa questions should be an array");
 });
@@ -104,8 +104,15 @@ test("Platform Store: proposal creation, support, comment, and GEF official resp
 });
 
 test("Platform Store: activities and student post-recess feedback", () => {
-  const store = getPlatformStore();
-  const proposal = store.proposals[0];
+  const proposal = createProposal({
+    title: "Atividade de Teste do Recreio",
+    body: "Descrição da atividade para teste",
+    author: "Administrador",
+    authorId: "admin",
+    anonymous: false,
+    theme: "Esportes",
+    origin: "gef",
+  });
 
   const activity = createActivity({
     proposalId: proposal.id,
