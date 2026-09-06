@@ -42,6 +42,7 @@ export type CommentRecord = {
   body: string;
   createdAt: string;
   parentId?: string;
+  likes?: number;
 };
 
 export type SupporterRecord = {
@@ -123,6 +124,7 @@ export type PlatformStore = {
   notifications: NotificationRecord[];
   supportedByUser: Record<string, string[]>;
   savedByUser: Record<string, string[]>;
+  likedCommentsByUser: Record<string, string[]>;
   supportersByProposal: Record<string, SupporterRecord[]>;
   chapas: ChapaRecord[];
   activityFeedbacks: Record<string, ActivityFeedbackRecord[]>;
@@ -295,6 +297,7 @@ function createInitialStore(): PlatformStore {
     ],
     supportedByUser: {},
     savedByUser: {},
+    likedCommentsByUser: {},
     supportersByProposal: {
       p1: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "livia", name: "Lívia", turma: "9º ano" }],
       p2: [{ id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "rafael", name: "Rafael Mendes", turma: "2º EM" }, { id: "nina", name: "Nina", turma: "7º ano" }],
@@ -325,8 +328,12 @@ export function getPlatformStore(): PlatformStore {
   if (!store.supportersByProposal) store.supportersByProposal = {};
   if (!store.savedByUser) store.savedByUser = {};
   if (!store.supportedByUser) store.supportedByUser = {};
+  if (!store.likedCommentsByUser) store.likedCommentsByUser = {};
   if (!store.activityFeedbacks) store.activityFeedbacks = structuredClone(seedActivityFeedbacks);
   if (!store.chapaQuestions) store.chapaQuestions = structuredClone(seedChapaQuestions);
+  store.comments.forEach((comment) => {
+    if (typeof comment.likes !== "number") comment.likes = 0;
+  });
 
   const existingProposalIds = new Set(store.proposals.map((proposal) => proposal.id));
   seedProposals.filter((proposal) => !existingProposalIds.has(proposal.id)).forEach((proposal) => store.proposals.push(structuredClone(proposal)));
@@ -394,6 +401,28 @@ export function addComment(proposalId: string, input: Omit<CommentRecord, "id" |
   store.notifications.unshift({ id: randomUUID(), title: "Nova interação na comunidade", body: `${comment.anonymous ? "Uma pessoa estudante" : comment.author} comentou uma proposta.`, createdAt: "Agora", read: false });
   saveStoreToDisk(store);
   return comment;
+}
+
+export function toggleCommentLike(commentId: string, userId: string) {
+  const store = getPlatformStore();
+  const comment = store.comments.find((item) => item.id === commentId);
+  if (!comment) return null;
+
+  const likedComments = store.likedCommentsByUser[userId] ?? [];
+  const index = likedComments.indexOf(commentId);
+  const currentLikes = typeof comment.likes === "number" ? comment.likes : 0;
+
+  if (index >= 0) {
+    likedComments.splice(index, 1);
+    comment.likes = Math.max(0, currentLikes - 1);
+  } else {
+    likedComments.push(commentId);
+    comment.likes = currentLikes + 1;
+  }
+
+  store.likedCommentsByUser[userId] = likedComments;
+  saveStoreToDisk(store);
+  return { liked: index < 0, likes: comment.likes };
 }
 
 export function toggleSupport(proposalId: string, userId: string) {

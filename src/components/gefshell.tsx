@@ -45,6 +45,7 @@ type ProposalComment = {
   body: string;
   createdAt: string;
   parentId?: string;
+  likes?: number;
 };
 
 type Supporter = {
@@ -115,6 +116,7 @@ type DemoState = {
   notifications: Notification[];
   supportedByUser: Record<string, string[]>;
   savedByUser: Record<string, string[]>;
+  likedCommentsByUser: Record<string, string[]>;
   supporters: Record<string, Supporter[]>;
   activityFeedbacks: Record<string, ActivityFeedback[]>;
   chapaQuestions: ChapaQuestion[];
@@ -164,7 +166,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
   );
 }
 
-type TactileAction = "support" | "save";
+type TactileAction = "support" | "save" | `like:${string}`;
 
 function useTactileCommit() {
   const [committingAction, setCommittingAction] = useState<TactileAction | null>(null);
@@ -264,6 +266,7 @@ const defaultState: DemoState = {
   savedByUser: {
     demo: ["p2"],
   },
+  likedCommentsByUser: {},
   supporters: {
     p1: [{ id: "marina", name: "Marina Costa", turma: "8º ano" }, { id: "joao", name: "João Pedro", turma: "1º EM" }, { id: "livia", name: "Lívia", turma: "9º ano" }],
     p2: [{ id: "bia", name: "Beatriz Lima", turma: "8º ano" }, { id: "rafael", name: "Rafael Mendes", turma: "2º EM" }, { id: "nina", name: "Nina", turma: "7º ano" }],
@@ -576,15 +579,20 @@ function CommentThread({
   proposalId,
   user,
   onComment,
+  onLike,
+  likedCommentIds,
 }: {
   comments: ProposalComment[];
   proposalId: string;
   user: User;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
 }) {
   const [body, setBody] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const roots = comments.filter((comment) => comment.proposalId === proposalId && !comment.parentId);
+  const { committingAction, run } = useTactileCommit();
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -601,7 +609,9 @@ function CommentThread({
         <span>Conversa aberta para a comunidade</span>
       </div>
       <div className="comment-list">
-        {roots.map((comment) => (
+        {roots.map((comment) => {
+          const liked = likedCommentIds.includes(comment.id);
+          return (
           <div className="comment-group" key={comment.id}>
             <div className={`comment ${comment.role === "gef" ? "comment-gef" : ""}`}>
               <Avatar name={comment.anonymous ? "EA" : comment.author} role={comment.role} />
@@ -612,9 +622,20 @@ function CommentThread({
                   <small>{comment.createdAt}</small>
                 </div>
                 <p>{comment.body}</p>
-                <button className="reply-link" onClick={() => setBody(`@${comment.anonymous ? "estudante" : comment.author} `)}>
-                  Responder <span><Icon name="thumbs" size={14} /> 1</span>
-                </button>
+                <div className="comment-actions">
+                  <button type="button" className="reply-link" onClick={() => setBody(`@${comment.anonymous ? "estudante" : comment.author} `)}>
+                    Responder
+                  </button>
+                  <button
+                    type="button"
+                    className={`comment-like-button tactile-control ${liked ? "is-liked" : ""} ${committingAction === `like:${comment.id}` ? "is-committing" : ""}`}
+                    aria-pressed={liked}
+                    aria-label={liked ? "Descurtir comentário" : "Curtir comentário"}
+                    onClick={() => run(`like:${comment.id}`, () => onLike(comment.id))}
+                  >
+                    <Icon name="thumbs" size={14} /> {comment.likes ?? 0}
+                  </button>
+                </div>
               </div>
             </div>
             {comments.filter((reply) => reply.parentId === comment.id).map((reply) => (
@@ -630,7 +651,8 @@ function CommentThread({
               </div>
             ))}
           </div>
-        ))}
+          );
+        })}
         {roots.length === 0 && <p className="empty-copy">Ainda não há comentários. Comece a conversa.</p>}
       </div>
       <form className="comment-composer" onSubmit={submit}>
@@ -685,6 +707,8 @@ function ProposalDetail({
   user,
   isGef,
   onComment,
+  onLike,
+  likedCommentIds,
   onSubmitGefResponse,
 }: {
   proposal: Proposal;
@@ -693,6 +717,8 @@ function ProposalDetail({
   user: User;
   isGef: boolean;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
 }) {
   const [showGefReply, setShowGefReply] = useState(true);
@@ -713,7 +739,7 @@ function ProposalDetail({
 
   return (
     <div className="detail-grid" id={`proposal-detail-${proposal.id}`}>
-      <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} />
+      <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
       <div className="detail-side">
         <SupportersPanel supporters={supporters} total={proposal.supports} />
         <aside className="how-card">
@@ -778,6 +804,8 @@ function ProposalPreview({
   onSave,
   onStatus,
   onComment,
+  onLike,
+  likedCommentIds,
   onSubmitGefResponse,
   onClose,
 }: {
@@ -792,6 +820,8 @@ function ProposalPreview({
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
   onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onLike: (commentId: string) => void;
+  likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -820,7 +850,7 @@ function ProposalPreview({
           <Icon name="bookmark" size={17} />{saved ? "Acompanhando" : "Acompanhar"}
         </button>
       </div>
-      <ProposalDetail proposal={proposal} comments={comments} supporters={supporters} user={user} isGef={isGef} onComment={onComment} onSubmitGefResponse={onSubmitGefResponse} />
+      <ProposalDetail proposal={proposal} comments={comments} supporters={supporters} user={user} isGef={isGef} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} onSubmitGefResponse={onSubmitGefResponse} />
       {isGef && (
         <div className="context-proposal-actions">
           <span><Icon name="spark" size={15} /> Ações do GEF</span>
@@ -1336,6 +1366,7 @@ export function GEFShell() {
             supporters: parsed.supporters ?? curr.supporters,
             supportedByUser: parsed.supportedByUser ?? curr.supportedByUser,
             savedByUser: parsed.savedByUser ?? curr.savedByUser,
+            likedCommentsByUser: parsed.likedCommentsByUser ?? curr.likedCommentsByUser,
             activityFeedbacks: parsed.activityFeedbacks ?? curr.activityFeedbacks,
             chapaQuestions: parsed.chapaQuestions ?? curr.chapaQuestions,
           }));
@@ -1367,6 +1398,7 @@ export function GEFShell() {
               supporters: p.supportersByProposal ?? curr.supporters,
               supportedByUser: p.supportedByUser ?? curr.supportedByUser,
               savedByUser: p.savedByUser ?? curr.savedByUser,
+              likedCommentsByUser: p.likedCommentsByUser ?? curr.likedCommentsByUser,
               activityFeedbacks: p.activityFeedbacks ?? curr.activityFeedbacks,
               chapaQuestions: p.chapaQuestions ?? curr.chapaQuestions,
             }));
@@ -1415,6 +1447,11 @@ export function GEFShell() {
     if (!user) return [];
     return state.savedByUser?.[user.id] ?? [];
   }, [user, state.savedByUser]);
+
+  const userLikedCommentIds = useMemo(() => {
+    if (!user) return [];
+    return state.likedCommentsByUser?.[user.id] ?? [];
+  }, [user, state.likedCommentsByUser]);
 
   const selected = state.proposals.find((proposal) => proposal.id === selectedId) ?? filteredProposals[0] ?? state.proposals[0];
   const savedProposals = useMemo(() => {
@@ -1532,60 +1569,71 @@ export function GEFShell() {
 
   async function toggleSupport(id: string) {
     if (!user) return;
-    try {
-      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
-      const data = await res.json();
-      const currentSupported = userSupportedIds.includes(id);
-      const supported = data.data ? data.data.supported : !currentSupported;
-      const totalSupports = data.data ? data.data.supports : undefined;
+    const currentUser = user;
+    const wasSupported = userSupportedIds.includes(id);
+    const previousSupports = state.proposals.find((proposal) => proposal.id === id)?.supports ?? 0;
+    const optimisticSupported = !wasSupported;
+
+    function applySupportState(supported: boolean, totalSupports: number) {
       setState((curr) => {
-        const userSupports = curr.supportedByUser?.[user.id] ?? [];
+        const userSupports = curr.supportedByUser?.[currentUser.id] ?? [];
         const nextUserSupports = supported
           ? (userSupports.includes(id) ? userSupports : [...userSupports, id])
           : userSupports.filter((item) => item !== id);
-
         const currentSupporters = curr.supporters[id] ?? [];
         const nextSupporters = supported
-          ? (currentSupporters.some((s) => s.id === user.id) ? currentSupporters : [...currentSupporters, { id: user.id, name: user.name, turma: user.turma }])
-          : currentSupporters.filter((s) => s.id !== user.id);
-
+          ? (currentSupporters.some((supporter) => supporter.id === currentUser.id) ? currentSupporters : [...currentSupporters, { id: currentUser.id, name: currentUser.name, turma: currentUser.turma }])
+          : currentSupporters.filter((supporter) => supporter.id !== currentUser.id);
         return {
           ...curr,
-          supportedByUser: {
-            ...curr.supportedByUser,
-            [user.id]: nextUserSupports,
-          },
+          supportedByUser: { ...curr.supportedByUser, [currentUser.id]: nextUserSupports },
           supporters: { ...curr.supporters, [id]: nextSupporters },
-          proposals: curr.proposals.map((p) => p.id === id ? { ...p, supports: totalSupports !== undefined ? totalSupports : Math.max(0, p.supports + (supported ? 1 : -1)) } : p),
+          proposals: curr.proposals.map((proposal) => proposal.id === id ? { ...proposal, supports: totalSupports } : proposal),
         };
       });
+    }
+
+    applySupportState(optimisticSupported, Math.max(0, previousSupports + (optimisticSupported ? 1 : -1)));
+
+    try {
+      const res = await fetch(`/api/proposals/${id}/support`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o apoio.");
+      const supported = typeof data.data?.supported === "boolean" ? data.data.supported : optimisticSupported;
+      const totalSupports = typeof data.data?.supports === "number" ? data.data.supports : previousSupports + (supported ? 1 : -1);
+      applySupportState(supported, Math.max(0, totalSupports));
     } catch (err) {
+      applySupportState(wasSupported, previousSupports);
       console.error(err);
     }
   }
 
   async function toggleSaved(id: string) {
     if (!user) return;
-    try {
-      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
-      const data = await res.json();
-      const currentSaved = userSavedIds.includes(id);
-      const saved = data.data ? data.data.saved : !currentSaved;
+    const currentUser = user;
+    const wasSaved = userSavedIds.includes(id);
+    const optimisticSaved = !wasSaved;
+
+    function applySavedState(saved: boolean) {
       setState((curr) => {
-        const userSaved = curr.savedByUser?.[user.id] ?? [];
+        const userSaved = curr.savedByUser?.[currentUser.id] ?? [];
         const nextUserSaved = saved
           ? (userSaved.includes(id) ? userSaved : [...userSaved, id])
           : userSaved.filter((item) => item !== id);
-
-        return {
-          ...curr,
-          savedByUser: {
-            ...curr.savedByUser,
-            [user.id]: nextUserSaved,
-          },
-        };
+        return { ...curr, savedByUser: { ...curr.savedByUser, [currentUser.id]: nextUserSaved } };
       });
+    }
+
+    applySavedState(optimisticSaved);
+
+    try {
+      const res = await fetch(`/api/proposals/${id}/save`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar o acompanhamento.");
+      const saved = typeof data.data?.saved === "boolean" ? data.data.saved : optimisticSaved;
+      applySavedState(saved);
     } catch (err) {
+      applySavedState(wasSaved);
       console.error(err);
     }
   }
@@ -1718,6 +1766,42 @@ export function GEFShell() {
         ],
       }));
     } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function toggleCommentLike(commentId: string) {
+    if (!user) return;
+    const currentUser = user;
+    const wasLiked = userLikedCommentIds.includes(commentId);
+    const previousLikes = state.comments.find((comment) => comment.id === commentId)?.likes ?? 0;
+    const optimisticLiked = !wasLiked;
+
+    function applyLikeState(liked: boolean, likes: number) {
+      setState((curr) => {
+        const currentIds = curr.likedCommentsByUser?.[currentUser.id] ?? [];
+        const nextIds = liked
+          ? (currentIds.includes(commentId) ? currentIds : [...currentIds, commentId])
+          : currentIds.filter((id) => id !== commentId);
+        return {
+          ...curr,
+          likedCommentsByUser: { ...curr.likedCommentsByUser, [currentUser.id]: nextIds },
+          comments: curr.comments.map((comment) => comment.id === commentId ? { ...comment, likes } : comment),
+        };
+      });
+    }
+
+    applyLikeState(optimisticLiked, Math.max(0, previousLikes + (optimisticLiked ? 1 : -1)));
+
+    try {
+      const res = await fetch(`/api/comments/${commentId}/like`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Não foi possível atualizar a curtida.");
+      const liked = typeof data.data?.liked === "boolean" ? data.data.liked : optimisticLiked;
+      const likes = typeof data.data?.likes === "number" ? data.data.likes : previousLikes + (liked ? 1 : -1);
+      applyLikeState(liked, Math.max(0, likes));
+    } catch (err) {
+      applyLikeState(wasLiked, previousLikes);
       console.error(err);
     }
   }
@@ -2044,6 +2128,8 @@ export function GEFShell() {
                         user={user}
                         isGef={isGef}
                         onComment={addComment}
+                        onLike={toggleCommentLike}
+                        likedCommentIds={userLikedCommentIds}
                         onSubmitGefResponse={submitGefResponse}
                       />
                     )}
@@ -2101,6 +2187,8 @@ export function GEFShell() {
                           user={user}
                           isGef={isGef}
                           onComment={addComment}
+                          onLike={toggleCommentLike}
+                          likedCommentIds={userLikedCommentIds}
                           onSubmitGefResponse={submitGefResponse}
                         />
                       )}
@@ -2218,6 +2306,8 @@ export function GEFShell() {
                   onSave={() => toggleSaved(agendaProposal.id)}
                   onStatus={(status) => changeStatus(agendaProposal.id, status)}
                   onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, agendaProposal.id)}
+                  onLike={toggleCommentLike}
+                  likedCommentIds={userLikedCommentIds}
                   onSubmitGefResponse={submitGefResponse}
                   onClose={() => setAgendaProposalId(null)}
                 />
@@ -2346,6 +2436,8 @@ export function GEFShell() {
                   onSave={() => toggleSaved(gefProposal.id)}
                   onStatus={(status) => changeStatus(gefProposal.id, status)}
                   onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, gefProposal.id)}
+                  onLike={toggleCommentLike}
+                  likedCommentIds={userLikedCommentIds}
                   onSubmitGefResponse={submitGefResponse}
                   onClose={() => setGefProposalId(null)}
                 />

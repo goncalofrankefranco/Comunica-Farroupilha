@@ -44,3 +44,25 @@ test("proposal comments detail has a smooth card-attached entrance", () => {
   assert.match(stylesSource, /@keyframes proposal-detail-in/);
   assert.match(stylesSource, /\.detail-grid[^}]*animation:[^;}]*proposal-detail-in/);
 });
+
+test("comment reply and like controls are independent actions", () => {
+  assert.match(shellSource, /className="comment-actions"/);
+  assert.match(shellSource, /className=\{`comment-like[\s\S]*aria-pressed=\{liked\}/);
+  assert.match(shellSource, /onLike\(comment\.id\)/);
+  assert.doesNotMatch(shellSource, /<button className="reply-link"[\s\S]*<span><Icon name="thumbs"/);
+});
+
+test("support and save update the local state before waiting for the API", () => {
+  for (const functionName of ["toggleSupport", "toggleSaved"]) {
+    const start = shellSource.indexOf(`async function ${functionName}`);
+    const end = shellSource.indexOf("\n  async function", start + 1);
+    const functionSource = shellSource.slice(start, end === -1 ? shellSource.length : end);
+    const fetchIndex = functionSource.indexOf("await fetch");
+    const stateIndex = functionSource.indexOf("setState((curr)");
+
+    assert.ok(start >= 0, `${functionName} should exist`);
+    assert.ok(stateIndex >= 0, `${functionName} should update local state`);
+    assert.ok(fetchIndex >= 0, `${functionName} should still synchronize with the API`);
+    assert.ok(stateIndex < fetchIndex, `${functionName} should render feedback before the network response`);
+  }
+});
