@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   }
 
   const credentials = await findAccountCredentials(name);
-  if (!credentials || !(await verifyPassword(password, credentials.passwordHash))) {
+  if (!credentials?.passwordHash || !(await verifyPassword(password, credentials.passwordHash))) {
     return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
   }
   await startSession(credentials.user);

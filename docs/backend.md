@@ -18,10 +18,14 @@ Contas são persistidas no banco. A senha é armazenada somente como hash `scryp
 
 O cookie usa `SameSite=Lax`, caminho `/`, duração de sete dias e `Secure` em produção. Logout revoga a sessão no banco. Nenhum endpoint público devolve hashes, tokens ou a lista de contas.
 
+O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Foto, token e ID token não são armazenados.
+
 ## Endpoints
 
 - `GET /api/health`: confirma processo e conexão com o banco; falha com 503 quando o Neon está indisponível.
 - `POST /api/auth/login`, `POST /api/auth/signup`, `GET /api/auth/me`, `POST /api/auth/logout`.
+- `GET /api/auth/google` e `GET /api/auth/google/callback`.
+- `POST /api/proposals/:id/cancel`: apenas o autor pode cancelar antes do agendamento.
 - `GET/POST /api/proposals`.
 - `GET/PATCH /api/proposals/:id`.
 - `GET/POST /api/proposals/:id/comments`.
@@ -49,6 +53,8 @@ O banco armazena todos os instantes em `timestamptz`. A API converte-os para ró
 
 `notification-manager.ts` atribui uma chave estável por evento, usa upsert para retries e compacta registros legados com o mesmo título e corpo. O agrupamento mantém o horário mais recente, soma `occurrences` e permanece não lido se qualquer ocorrência ainda estiver não lida.
 
+Propostas e comentários novos notificam a equipe GEF; respostas e mudanças de status notificam o autor da proposta; atividades notificam estudantes. Notificações legadas sem destinatário continuam visíveis para as contas existentes. A preferência de categoria e o filtro de não lidas ficam no armazenamento local do navegador.
+
 ## Migração do legado
 
 Quando um navegador ainda contém `comunica-farroupilha-demo` ou `gremio-comunica-demo`, a visão do GEF mostra uma prévia. A importação só ocorre após clique explícito.
@@ -67,3 +73,5 @@ pnpm build
 ```
 
 As migrações desta entrega são aditivas. Antes de mudanças destrutivas futuras, criar backup no Neon e uma migration reversível. Rate limiting distribuído e verificação de vínculo escolar continuam sendo requisitos antes de abertura ampla para toda a comunidade.
+
+Antes de publicar esta versão, executar `pnpm db:migrate` contra o banco configurado, incluindo `0005_participation_workflows.sql` e `0006_google_auth.sql`. Registrar a URL exata do callback Google como URI autorizada no console OAuth.

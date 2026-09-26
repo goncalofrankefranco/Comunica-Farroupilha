@@ -22,7 +22,7 @@ test("passwords are stored as versioned scrypt hashes and verified safely", asyn
   assert.equal(await verifyPassword(password, "hash-invalido"), false);
 });
 
-test("database sessions expire and can be revoked without storing raw tokens", async () => {
+test("database sessions expire and can be revoked without storing raw tokens", { skip: !process.env.DATABASE_URL }, async () => {
   assert.equal(existsSync("src/lib/auth-repository.ts"), true, "auth repository must exist");
   assert.equal(existsSync("src/lib/session-token.ts"), true, "session token helpers must exist");
   const auth = await import("../src/lib/auth-repository.ts");

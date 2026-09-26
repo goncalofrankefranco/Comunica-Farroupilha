@@ -26,10 +26,12 @@ export async function POST(request: Request, context: RouteContext) {
     const parentId = body.parentId === undefined ? undefined : requiredString(body.parentId, { max: 64 });
     if (!text || (body.parentId !== undefined && !parentId)) return errorResponse("O comentário precisa ter entre 3 e 2000 caracteres.", 400);
     const { id } = await context.params;
-    if (!(await getProposal(id))) return errorResponse("Proposta não encontrada.", 404);
+    const proposal = await getProposal(id);
+    if (!proposal) return errorResponse("Proposta não encontrada.", 404);
+    if (proposal.status === "cancelled") return errorResponse("Esta proposta foi cancelada e não aceita novos comentários.", 409);
     const comment = await addComment(id, {
       author: user.name, authorId: user.id, role: user.role,
-      anonymous: user.role === "student" && body.anonymous === true,
+      anonymous: false,
       body: text, ...(parentId ? { parentId } : {}),
     });
     return dataResponse(comment, { status: 201 });

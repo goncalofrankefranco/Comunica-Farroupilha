@@ -93,7 +93,7 @@ test("proposal detail does not expose the public supporter roster", () => {
 });
 
 test("proposal detail does not leave an empty side rail for students", () => {
-  assert.match(shellSource, /\{isGef && onSubmitGefResponse && \(\s*<div className="detail-side">/s);
+  assert.match(shellSource, /\{isGef && proposal\.status !== "cancelled" && onSubmitGefResponse && \(\s*<div className="detail-side">/s);
   assert.doesNotMatch(shellSource, /<div className="detail-side">\s*\{isGef && onSubmitGefResponse && \(/s);
 });
 

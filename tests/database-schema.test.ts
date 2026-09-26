@@ -45,3 +45,21 @@ test("credentials use hashes rather than plaintext password storage", () => {
   assert.match(source, /token_hash\s+TEXT\s+(?:PRIMARY KEY|NOT NULL)/i);
   assert.doesNotMatch(source, /\bpassword\s+TEXT\b/i);
 });
+
+test("workflow migration supports cancellation and targeted notifications", () => {
+  const source = readFileSync("db/migrations/0005_participation_workflows.sql", "utf8");
+  assert.match(source, /'cancelled'/);
+  assert.match(source, /notification_type TEXT/);
+  assert.match(source, /proposal_id UUID REFERENCES proposals/);
+  assert.match(source, /recipient_user_id UUID REFERENCES users/);
+  assert.match(source, /recipient_role TEXT/);
+});
+
+test("Google migration links verified identities without requiring a local password", () => {
+  const source = readFileSync("db/migrations/0006_google_auth.sql", "utf8");
+  assert.match(source, /ADD COLUMN IF NOT EXISTS email TEXT/);
+  assert.match(source, /ADD COLUMN IF NOT EXISTS google_sub TEXT/);
+  assert.match(source, /ALTER COLUMN password_hash DROP NOT NULL/);
+  assert.match(source, /users_email_unique_idx/);
+  assert.match(source, /users_google_sub_unique_idx/);
+});

@@ -74,7 +74,7 @@ export function applyCommentLikeState<T extends InteractiveState>(state: T, user
   } as T;
 }
 
-const preferenceKeys = ["view", "query", "themeFilter", "statusFilter", "sort"] as const;
+const preferenceKeys = ["view", "query", "themeFilter", "statusFilter", "sort", "notificationFilter", "unreadOnly"] as const;
 
 export function serializeUiPreferences(input: Record<string, unknown>) {
   const preferences: Record<string, string> = {};

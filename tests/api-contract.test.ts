@@ -6,6 +6,7 @@ const domainRoutes = [
   "src/app/api/platform/route.ts",
   "src/app/api/proposals/route.ts",
   "src/app/api/proposals/[id]/route.ts",
+  "src/app/api/proposals/[id]/cancel/route.ts",
   "src/app/api/proposals/[id]/comments/route.ts",
   "src/app/api/proposals/[id]/support/route.ts",
   "src/app/api/proposals/[id]/save/route.ts",

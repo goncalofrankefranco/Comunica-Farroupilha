@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   const existing = await findAccountCredentials(name);
   if (existing) {
-    if (!(await verifyPassword(body.password, existing.passwordHash))) {
+    if (!existing.passwordHash || !(await verifyPassword(body.password, existing.passwordHash))) {
       return Response.json({ error: "Esse nome de usuário já está em uso." }, { status: 409 });
     }
     await startSession(existing.user);

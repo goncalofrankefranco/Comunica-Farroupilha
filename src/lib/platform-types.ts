@@ -1,5 +1,5 @@
 export type UserRole = "student" | "gef";
-export type ProposalStatus = "received" | "analysis" | "development" | "scheduled" | "completed" | "archived";
+export type ProposalStatus = "received" | "analysis" | "development" | "scheduled" | "completed" | "archived" | "cancelled";
 export type ActivityStatus = "upcoming" | "done" | "cancelled";
 export type ActivityFeedbackRating = "great" | "good" | "ok" | "poor";
 
@@ -67,13 +67,17 @@ export type ActivityFeedbackRecord = {
   createdAt: string;
 };
 
+export type NotificationType = "proposal" | "comment" | "activity" | "system";
+
 export type NotificationRecord = {
   id: string;
   title: string;
   body: string;
   createdAt: string;
   read: boolean;
+  type: NotificationType;
   activityId?: string;
+  proposalId?: string;
   occurrences?: number;
 };
 

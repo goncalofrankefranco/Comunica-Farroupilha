@@ -38,7 +38,7 @@ test("legacy sanitizer removes credentials and bounds imported domain data", asy
   assert.deepEqual(previewLegacyState(raw), { proposals: 500, comments: 1, activities: 0, chapaQuestions: 0 });
 });
 
-test("legacy import is transactional and idempotent", async () => {
+test("legacy import is transactional and idempotent", { skip: !process.env.DATABASE_URL }, async () => {
   const { sanitizeLegacyImport } = await import("../src/lib/legacy-import.ts");
   const { importLegacyData, getPlatformSnapshot } = await import("../src/lib/platform-repository.ts");
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });

@@ -14,7 +14,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (typeof body.saved !== "boolean") return errorResponse("Informe a intenção de acompanhamento.", 400);
     if (typeof body.revision !== "number" || !Number.isSafeInteger(body.revision) || body.revision < 0) return errorResponse("Informe uma revisão de interação válida.", 400);
     const { id } = await context.params;
-    if (!(await getProposal(id))) return errorResponse("Proposta não encontrada.", 404);
+    const proposal = await getProposal(id);
+    if (!proposal) return errorResponse("Proposta não encontrada.", 404);
+    if (proposal.status === "cancelled") return errorResponse("Esta proposta foi cancelada e não pode ser acompanhada.", 409);
     return dataResponse(await setSaved(id, user.id, body.saved, body.revision));
   } catch (error) {
     return unavailableResponse("set-save", error);

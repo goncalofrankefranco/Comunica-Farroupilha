@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SelectMenu } from "@/components/select-menu";
 import {
   applyCommentLikeState,
@@ -16,16 +16,62 @@ import {
 } from "@/lib/client-platform-state";
 import { previewLegacyState, sanitizeLegacyImport } from "@/lib/legacy-import";
 import { ELECTIONS_ENABLED } from "@/lib/feature-flags";
+import {
+  canCancelProposal,
+  filterNotifications,
+  getNotificationDestination,
+  isValidDateKey,
+  localDateKey,
+  type NotificationFilter,
+  type NotificationType,
+} from "@/lib/participation-domain";
 
 type Role = "student" | "gef";
 type View = "proposals" | "saved" | "agenda" | "chapas" | "notifications" | "gef";
-type ProposalStatus = "received" | "analysis" | "development" | "scheduled" | "completed" | "archived";
+type ProposalStatus = "received" | "analysis" | "development" | "scheduled" | "completed" | "archived" | "cancelled";
 
 type User = {
   id: string;
   name: string;
   turma: string;
   role: Role;
+};
+
+function subscribeToLocalDate(onChange: () => void) {
+  const interval = window.setInterval(onChange, 60_000);
+  window.addEventListener("focus", onChange);
+  return () => {
+    window.clearInterval(interval);
+    window.removeEventListener("focus", onChange);
+  };
+}
+
+function getLocalDateSnapshot() {
+  return localDateKey(new Date());
+}
+
+function getServerDateSnapshot() {
+  return "";
+}
+
+function subscribeToAuthLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
+
+function getAuthErrorSnapshot() {
+  return new URLSearchParams(window.location.search).get("authError") ?? "";
+}
+
+function getServerAuthErrorSnapshot() {
+  return "";
+}
+
+const AUTH_ERRORS: Record<string, string> = {
+  "google-unavailable": "O acesso com Google ainda não está configurado.",
+  "google-expired": "A tentativa de acesso expirou. Tente novamente.",
+  "google-domain": "Use uma conta escolar verificada @farroups.com.br.",
+  "google-failed": "Não foi possível entrar com o Google.",
 };
 
 type Proposal = {
@@ -97,7 +143,9 @@ type Notification = {
   body: string;
   createdAt: string;
   read: boolean;
+  type: NotificationType;
   activityId?: string;
+  proposalId?: string;
   occurrences?: number;
 };
 
@@ -143,6 +191,7 @@ const STATUS: Record<ProposalStatus, { label: string; color: string; step: numbe
   scheduled: { label: "Agendada", color: "#e65b28", step: 4 },
   completed: { label: "Concluída", color: "#20805e", step: 5 },
   archived: { label: "Arquivada", color: "#526475", step: 1 },
+  cancelled: { label: "Cancelada", color: "#b24222", step: 0 },
 };
 
 const ICON_PATHS: Record<string, string[]> = {
@@ -195,11 +244,6 @@ function useTactileCommit() {
   }
 
   return { committingAction, run };
-}
-
-function Avatar({ name, role, small = false }: { name: string; role?: Role; small?: boolean }) {
-  const initials = role === "gef" ? "GEF" : name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
-  return <span className={`avatar ${role === "gef" ? "avatar-gef" : ""} ${small ? "avatar-small" : ""}`} aria-hidden="true">{initials}</span>;
 }
 
 function ProfileMenu({ onLogout, onReset }: { onLogout: () => void; onReset: () => void }) {
@@ -441,25 +485,29 @@ function ProposalCard({
   supported,
   saved,
   isGef,
+  canCancel,
   onSelect,
   onSupport,
   onSave,
   onStatus,
+  onCancel,
 }: {
   proposal: Proposal;
   selected: boolean;
   supported: boolean;
   saved: boolean;
   isGef: boolean;
+  canCancel: boolean;
   onSelect: () => void;
   onSupport: () => void;
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
+  onCancel: () => void;
 }) {
   const { committingAction, run } = useTactileCommit();
 
   return (
-    <article className={`proposal-card ${selected ? "is-selected" : ""}`}>
+    <article id={`proposal-${proposal.id}`} className={`proposal-card ${selected ? "is-selected" : ""}`}>
       <div className="proposal-card-main">
         <button type="button" className="proposal-card-select" onClick={onSelect} aria-expanded={selected} aria-controls={`proposal-detail-${proposal.id}`}>
         <div className="proposal-card-top">
@@ -472,13 +520,13 @@ function ProposalCard({
             <h3>{proposal.title}</h3>
             <p>{proposal.body}</p>
           </div>
-          {selected && <ProgressSteps status={proposal.status} />}
+          {selected && proposal.status !== "cancelled" && proposal.status !== "archived" && <ProgressSteps status={proposal.status} />}
         </div>
         </button>
         <div className="proposal-card-meta">
           <span className="author-meta">
-            <Avatar name={proposal.origin === "gef" ? "GEF" : proposal.anonymous ? "EA" : proposal.author} role={proposal.origin === "gef" ? "gef" : undefined} small />
             <span>
+              {proposal.origin === "gef" && <Image className="gef-inline-mark" src="/brand/gef.png" alt="GEF" width={18} height={18} />}
               <strong>{authorLabel(proposal)}</strong>
               <small>{proposal.anonymous ? `Autoria preservada · Criada ${proposal.createdAt}` : `Criada ${proposal.createdAt} · ${proposal.theme}`}</small>
             </span>
@@ -487,16 +535,20 @@ function ProposalCard({
           <button type="button" className="comment-count tactile-control" aria-label={`Abrir comentários da proposta (${proposal.comments})`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
             <Icon name="message" size={18} /> {proposal.comments}
           </button>
-          <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); run("support", onSupport); }}>
+          {proposal.status !== "cancelled" && <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); run("support", onSupport); }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
-          </button>
-          <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Acompanhando proposta" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); run("save", onSave); }}>
+          </button>}
+          {proposal.status !== "cancelled" && <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Remover dos acompanhados" : "Acompanhar proposta"} onClick={(event) => { event.stopPropagation(); run("save", onSave); }}>
             <Icon name="bookmark" size={18} />
-          </button>
+          </button>}
         </div>
       </div>
 
-      {isGef && selected && (
+      {canCancel && <div className="proposal-author-actions">
+        <button type="button" onClick={onCancel}><Icon name="close" size={15} />Cancelar proposta</button>
+      </div>}
+
+      {isGef && selected && proposal.status !== "cancelled" && (
         <div className="gef-card-actions">
           <span className="admin-note"><Icon name="spark" size={15} /> Ações do GEF</span>
           {proposal.status === "received" && <button onClick={() => onStatus("analysis")}>Enviar para análise <Icon name="arrow" size={15} /></button>}
@@ -513,29 +565,27 @@ function ProposalCard({
 function CommentThread({
   comments,
   proposalId,
-  user,
+  closed,
   onComment,
   onLike,
   likedCommentIds,
 }: {
   comments: ProposalComment[];
   proposalId: string;
-  user: User;
-  onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  closed: boolean;
+  onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
 }) {
   const [body, setBody] = useState("");
-  const [anonymous, setAnonymous] = useState(false);
   const roots = comments.filter((comment) => comment.proposalId === proposalId && !comment.parentId);
   const { committingAction, run } = useTactileCommit();
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (body.trim().length < 3) return;
-    onComment(body.trim(), anonymous);
+    onComment(body.trim());
     setBody("");
-    setAnonymous(false);
   }
 
   return (
@@ -553,9 +603,9 @@ function CommentThread({
           return (
           <div className="comment-group" key={comment.id}>
             <div className={`comment ${comment.role === "gef" ? "comment-gef" : ""}`}>
-              <Avatar name={comment.anonymous ? "EA" : comment.author} role={comment.role} />
               <div className="comment-content">
                 <div className="comment-byline">
+                  {comment.role === "gef" && <Image className="gef-inline-mark" src="/brand/gef.png" alt="GEF" width={18} height={18} />}
                   <strong>{comment.anonymous ? "Estudante anônimo" : comment.author}</strong>
                   {comment.role === "gef" && <span className="gef-tag">Equipe do Grêmio</span>}
                   <small>{comment.createdAt}</small>
@@ -579,9 +629,9 @@ function CommentThread({
             </div>
             {comments.filter((reply) => reply.parentId === comment.id).map((reply) => (
               <div className="comment comment-reply" key={reply.id}>
-                <Avatar name={reply.author} role={reply.role} small />
                 <div className="comment-content">
                   <div className="comment-byline">
+                    {reply.role === "gef" && <Image className="gef-inline-mark" src="/brand/gef.png" alt="GEF" width={18} height={18} />}
                     <strong>{reply.author}</strong>
                     <small>{reply.createdAt}</small>
                   </div>
@@ -600,16 +650,16 @@ function CommentThread({
           </div>
         )}
       </div>
-      <form className="comment-composer" onSubmit={submit}>
-        <Avatar name={user.name} role={user.role} small />
-        <div className="composer-input">
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Compartilhe uma ideia ou responda à conversa…" rows={2} maxLength={1000} />
-          <div className="composer-footer">
-            <label><input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} /> Comentar anonimamente</label>
-            <button type="submit" disabled={body.trim().length < 3}>Comentar <Icon name="arrow" size={15} /></button>
+      {closed ? <p className="comments-closed" role="status">Esta proposta foi cancelada. Os comentários anteriores permanecem disponíveis.</p> : (
+        <form className="comment-composer" onSubmit={submit}>
+          <div className="composer-input">
+            <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Compartilhe uma ideia ou responda à conversa…" rows={2} maxLength={1000} />
+            <div className="composer-footer">
+              <button type="submit" disabled={body.trim().length < 3}>Comentar <Icon name="arrow" size={15} /></button>
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
+      )}
     </section>
   );
 }
@@ -617,7 +667,6 @@ function CommentThread({
 function ProposalDetail({
   proposal,
   comments,
-  user,
   onComment,
   onLike,
   likedCommentIds,
@@ -626,9 +675,8 @@ function ProposalDetail({
 }: {
   proposal: Proposal;
   comments: ProposalComment[];
-  user: User;
   isGef: boolean;
-  onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
@@ -647,8 +695,8 @@ function ProposalDetail({
 
   return (
     <div className="detail-grid" id={`proposal-detail-${proposal.id}`}>
-      <CommentThread comments={comments} proposalId={proposal.id} user={user} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
-      {isGef && onSubmitGefResponse && (
+      <CommentThread comments={comments} proposalId={proposal.id} closed={proposal.status === "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
+      {isGef && proposal.status !== "cancelled" && onSubmitGefResponse && (
         <div className="detail-side">
           <div className="gef-response-tools" aria-label="Resposta oficial do GEF">
             <div className="gef-response-tools-head">
@@ -681,7 +729,6 @@ function ProposalDetail({
 function ProposalPreview({
   proposal,
   comments,
-  user,
   isGef,
   supported,
   saved,
@@ -696,14 +743,13 @@ function ProposalPreview({
 }: {
   proposal: Proposal;
   comments: ProposalComment[];
-  user: User;
   isGef: boolean;
   supported: boolean;
   saved: boolean;
   onSupport: () => void;
   onSave: () => void;
   onStatus: (status: ProposalStatus) => void;
-  onComment: (body: string, anonymous: boolean, parentId?: string) => void;
+  onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
@@ -727,15 +773,15 @@ function ProposalPreview({
         <span>{proposal.theme}</span>
         <span>{proposal.supports} apoios</span>
         <span>{proposal.comments} comentários</span>
-        <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={() => run("support", onSupport)}>
+        {proposal.status !== "cancelled" && <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={() => run("support", onSupport)}>
           <Icon name="thumbs" size={17} />{supported ? "Apoiado" : "Apoiar"}
-        </button>
-        <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} onClick={() => run("save", onSave)} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"}>
-          <Icon name="bookmark" size={17} />{saved ? "Acompanhando" : "Acompanhar"}
-        </button>
+        </button>}
+        {proposal.status !== "cancelled" && <button type="button" className={`save-button tactile-control ${saved ? "is-saved" : ""} ${committingAction === "save" ? "is-committing" : ""}`} aria-pressed={saved} onClick={() => run("save", onSave)} aria-label={saved ? "Remover proposta dos acompanhados" : "Acompanhar proposta"} title={saved ? "Remover dos acompanhados" : "Acompanhar proposta"}>
+          <Icon name="bookmark" size={17} />
+        </button>}
       </div>
-      <ProposalDetail proposal={proposal} comments={comments} user={user} isGef={isGef} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} onSubmitGefResponse={onSubmitGefResponse} />
-      {isGef && (
+      <ProposalDetail proposal={proposal} comments={comments} isGef={isGef && proposal.status !== "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} onSubmitGefResponse={onSubmitGefResponse} />
+      {isGef && proposal.status !== "cancelled" && (
         <div className="context-proposal-actions">
           <span><Icon name="spark" size={15} /> Ações do GEF</span>
           {proposal.status === "received" && <button type="button" onClick={() => onStatus("analysis")}>Enviar para análise <Icon name="arrow" size={15} /></button>}
@@ -749,22 +795,21 @@ function ProposalPreview({
   );
 }
 
-function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => void; onCreate: (proposal: { title: string; body: string; theme: string; anonymous: boolean }) => void }) {
+function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => void; onCreate: (proposal: { title: string; body: string; theme: string }) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [theme, setTheme] = useState(THEMES[0]);
-  const [anonymous, setAnonymous] = useState(false);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (title.trim().length < 5 || body.trim().length < 20) return;
-    onCreate({ title: title.trim(), body: body.trim(), anonymous, theme });
+    onCreate({ title: title.trim(), body: body.trim(), theme });
   }
 
   const isGef = user.role === "gef";
 
   return (
-    <form className="composer-panel" onSubmit={submit}>
+    <form id="proposal-composer" className="composer-panel" onSubmit={submit}>
       <div className="composer-panel-head">
         <div>
           <span className="eyebrow">{isGef ? "CONSULTA À COMUNIDADE (GEF)" : "NOVA PROPOSTA"}</span>
@@ -786,23 +831,10 @@ function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => vo
             className="select-menu-field"
           />
         </div>
-        {!isGef ? (
-          <div className="form-field visibility-select">
-            <span className="form-field-label">Autoria</span>
-            <SelectMenu
-              value={anonymous ? "anonymous" : "named"}
-              onChange={(value) => setAnonymous(value === "anonymous")}
-              options={[{ value: "named", label: "Publicar com meu nome" }, { value: "anonymous", label: "Publicar anonimamente" }]}
-              ariaLabel="Visibilidade da autoria"
-              className="select-menu-field"
-            />
-          </div>
-        ) : (
-          <label>Autoria<input value="Grêmio Estudantil Farroupilha" disabled /></label>
-        )}
+        {isGef && <label>Autoria<input value="Grêmio Estudantil Farroupilha" disabled /></label>}
       </div>
       <div className="composer-help">
-        <Icon name="info" size={16} /> {isGef ? "Essa proposta será identificada como uma consulta oficial do GEF." : "Seu nome e sua turma ficam protegidos quando você escolhe publicar anonimamente."}
+        <Icon name="info" size={16} /> {isGef ? "Essa proposta será identificada como uma consulta oficial do GEF." : "A proposta será publicada com o nome da sua conta."}
       </div>
       <div className="composer-actions">
         <button type="button" className="secondary-button" onClick={onCancel}>Cancelar</button>
@@ -1064,13 +1096,17 @@ function shiftMonth(monthKey: string, amount: number) {
 function CalendarMonth({
   activities,
   monthKey,
+  todayKey,
   onMonthChange,
+  onToday,
   onSelect,
 }: {
   activities: Activity[];
   monthKey: string;
+  todayKey: string;
   onMonthChange: (monthKey: string) => void;
-  onSelect: (proposalId: string) => void;
+  onToday: () => void;
+  onSelect: (activityId: string) => void;
 }) {
   const [year, monthNumber] = monthKey.split("-").map(Number);
   const month = monthNumber - 1;
@@ -1091,6 +1127,7 @@ function CalendarMonth({
           <h3 id="calendar-title">{monthLabel(monthKey)}</h3>
         </div>
         <div className="calendar-month-actions">
+          <button type="button" className="calendar-today" onClick={onToday}>Hoje</button>
           <button type="button" className="calendar-nav" onClick={() => onMonthChange(shiftMonth(monthKey, -1))} aria-label="Mês anterior"><Icon name="arrow" size={15} /></button>
           <button type="button" className="calendar-nav next" onClick={() => onMonthChange(shiftMonth(monthKey, 1))} aria-label="Próximo mês"><Icon name="arrow" size={15} /></button>
           <span className="calendar-legend"><i /> atividade publicada</span>
@@ -1104,7 +1141,7 @@ function CalendarMonth({
           const activity = dayItems[0];
           const date = `${year}-${String(monthNumber).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           return (
-            <button type="button" role="gridcell" className={`calendar-cell ${dayItems.length ? "has-activity" : ""} ${date === "2026-09-08" ? "is-today" : ""}`} key={day} onClick={() => activity && onSelect(activity.proposalId)} aria-label={`${day} de ${monthLabel(monthKey)}${dayItems.length ? `: ${dayItems.map((item) => item.title).join(", ")}` : ""}`}>
+            <button type="button" role="gridcell" className={`calendar-cell ${dayItems.length ? "has-activity" : ""} ${date === todayKey ? "is-today" : ""}`} key={day} onClick={() => activity && onSelect(activity.id)} aria-label={`${day} de ${monthLabel(monthKey)}${dayItems.length ? `: ${dayItems.map((item) => item.title).join(", ")}` : ""}`}>
               <span>{day}</span>
               {activity && <><i title={activity.title} />{dayItems.length > 1 && <b>{dayItems.length}</b>}</>}
             </button>
@@ -1115,28 +1152,29 @@ function CalendarMonth({
   );
 }
 
-function ActivityComposer({ proposals, onCancel, onCreate }: { proposals: Proposal[]; onCancel: () => void; onCreate: (activity: { proposalId: string; title: string; date: string; time: string; place: string; audience: string }) => void }) {
-  const eligible = proposals.filter((proposal) => proposal.status === "development" || proposal.status === "analysis");
-  const list = eligible.length ? eligible : proposals;
-  const [proposalId, setProposalId] = useState(list[0]?.id ?? "");
-  const [title, setTitle] = useState(list[0]?.title ?? "Atividade no recreio");
-  const [date, setDate] = useState("2026-09-15");
+function ActivityComposer({ proposals, initialProposalId, onCancel, onCreate }: { proposals: Proposal[]; initialProposalId?: string; onCancel: () => void; onCreate: (activity: { proposalId: string; title: string; date: string; time: string; place: string; audience: string }) => void }) {
+  const list = proposals.filter((proposal) => proposal.status === "development" || proposal.status === "analysis");
+  const initialProposal = list.find((proposal) => proposal.id === initialProposalId) ?? list[0];
+  const [proposalId, setProposalId] = useState(initialProposal?.id ?? "");
+  const [title, setTitle] = useState(initialProposal?.title ?? "Atividade no recreio");
+  const [date, setDate] = useState(localDateKey(new Date()));
   const [time, setTime] = useState("10:15–10:35");
   const [place, setPlace] = useState("Pátio central");
+  const minDate = localDateKey(new Date());
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!title.trim() || !date || !place.trim()) return;
+    if (!proposalId || !title.trim() || !isValidDateKey(date) || date < minDate || !place.trim()) return;
     onCreate({ proposalId, title: title.trim(), date, time, place: place.trim(), audience: "Todas as turmas" });
   }
 
   return (
-    <form className="activity-form" onSubmit={submit}>
+    <form id="activity-composer" className="activity-form" onSubmit={submit}>
       <div className="composer-panel-head">
         <div>
           <span className="eyebrow">NOVA ATIVIDADE</span>
           <h2>Colocar uma proposta na agenda</h2>
-          <p>O aviso será criado para todos os alunos e a proposta entrará em agendada.</p>
+          <p>A atividade será adicionada à agenda e os estudantes receberão um aviso.</p>
         </div>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="Fechar agenda"><Icon name="close" size={20} /></button>
       </div>
@@ -1145,21 +1183,22 @@ function ActivityComposer({ proposals, onCancel, onCreate }: { proposals: Propos
         <SelectMenu
           value={proposalId}
           onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
-          options={list.length ? list.map((p) => ({ value: p.id, label: p.title })) : [{ value: "", label: "Nenhuma proposta vinculada (atividade geral)" }]}
+          options={list.map((p) => ({ value: p.id, label: p.title }))}
           ariaLabel="Proposta de origem da atividade"
           className="select-menu-field"
         />
       </div>
       <label>Título da atividade<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       <div className="form-row">
-        <label>Data<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+        <label>Data<input type="date" min={minDate} value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Horário<input value={time} onChange={(event) => setTime(event.target.value)} /></label>
       </div>
       <label>Local<input value={place} onChange={(event) => setPlace(event.target.value)} /></label>
+      {list.length === 0 && <p className="form-error">Só é possível agendar propostas em análise ou em desenvolvimento.</p>}
       <div className="composer-help"><Icon name="bell" size={16} /> Todas as turmas receberão o aviso dentro da plataforma.</div>
       <div className="composer-actions">
         <button type="button" className="secondary-button" onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="primary-button">Publicar na agenda <Icon name="arrow" size={16} /></button>
+        <button type="submit" className="primary-button" disabled={!proposalId || !title.trim() || !isValidDateKey(date) || date < minDate || !place.trim()}>Publicar na agenda <Icon name="arrow" size={16} /></button>
       </div>
     </form>
   );
@@ -1172,11 +1211,21 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const authErrorCode = useSyncExternalStore(subscribeToAuthLocation, getAuthErrorSnapshot, getServerAuthErrorSnapshot);
+  const displayedError = error || AUTH_ERRORS[authErrorCode] || "";
+
+  function clearError() {
+    setError("");
+    if (authErrorCode) {
+      window.history.replaceState(null, "", "/app");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    clearError();
     const result = mode === "login" ? await onLogin(name.trim(), password) : await onSignup(name.trim(), turma, password);
     setBusy(false);
     if (result) setError(result);
@@ -1192,19 +1241,25 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
         <h1>{mode === "login" ? "Que bom ter você por aqui." : "Faça parte da conversa."}</h1>
         <p>{mode === "login" ? "Entre para acompanhar as propostas e ajudar a construir o próximo recreio." : "Crie uma conta para propor, apoiar e avaliar atividades."}</p>
         <div className="auth-tabs">
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setError(""); }}>Entrar</button>
-          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); setError(""); }}>Criar conta</button>
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); clearError(); }}>Entrar</button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); clearError(); }}>Criar conta</button>
         </div>
         <form onSubmit={submit}>
           <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
           {mode === "signup" && <label>Turma<input value={turma} onChange={(event) => setTurma(event.target.value)} placeholder="Ex.: 8º ano A ou 2º EM" autoComplete="organization" required /></label>}
           <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} required /></label>
-          {error && <p className="form-error" role="alert">{error}</p>}
+          {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
             {busy ? "Aguarde…" : mode === "login" ? "Entrar na plataforma" : "Criar minha conta"}
             <Icon name="arrow" size={16} />
           </button>
         </form>
+        {mode === "login" && <>
+          <div className="auth-divider"><span>ou</span></div>
+          <a className="google-login-button" href="/api/auth/google">
+            <span aria-hidden="true">G</span>Continuar com Google
+          </a>
+        </>}
         <div className="auth-note">
           <Icon name="info" size={16} />
           <span>Estudantes podem criar uma conta. O acesso administrativo do GEF é gerenciado com credenciais seguras pela equipe responsável.</span>
@@ -1236,7 +1291,8 @@ export function GEFShell() {
   const [initialPreferences] = useState(getInitialUiPreferences);
   const [state, setState] = useState<DemoState>(defaultState);
   const [view, setView] = useState<View>(() =>
-    initialPreferences.view && ["proposals", "saved", "agenda", "chapas", "notifications", "gef"].includes(initialPreferences.view)
+    initialPreferences.view && ["proposals", "saved", "agenda", "chapas", "notifications", "gef"].includes(initialPreferences.view) &&
+    (initialPreferences.view !== "chapas" || ELECTIONS_ENABLED)
       ? initialPreferences.view as View
       : "proposals",
   );
@@ -1245,9 +1301,21 @@ export function GEFShell() {
   const [themeFilter, setThemeFilter] = useState(initialPreferences.themeFilter ?? "Todos");
   const [statusFilter, setStatusFilter] = useState<ProposalStatus | "all">((initialPreferences.statusFilter as ProposalStatus | "all") ?? "all");
   const [sort, setSort] = useState<"recent" | "supports">(initialPreferences.sort === "supports" ? "supports" : "recent");
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>(() =>
+    ["all", "proposal", "comment", "activity", "system"].includes(initialPreferences.notificationFilter)
+      ? initialPreferences.notificationFilter as NotificationFilter
+      : "all",
+  );
+  const [unreadOnly, setUnreadOnly] = useState(initialPreferences.unreadOnly === "true");
   const [composerOpen, setComposerOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
-  const [agendaMonthKey, setAgendaMonthKey] = useState("2026-09");
+  const todayKey = useSyncExternalStore(subscribeToLocalDate, getLocalDateSnapshot, getServerDateSnapshot);
+  const [agendaMonthOverride, setAgendaMonthOverride] = useState<string | null>(null);
+  const agendaMonthKey = agendaMonthOverride ?? (todayKey ? todayKey.slice(0, 7) : "");
+  const [activityProposalId, setActivityProposalId] = useState("");
+  const [pendingProposalScrollId, setPendingProposalScrollId] = useState<string | null>(null);
+  const [pendingActivityScrollId, setPendingActivityScrollId] = useState<string | null>(null);
+  const [pendingAgendaProposalScrollId, setPendingAgendaProposalScrollId] = useState<string | null>(null);
   const [agendaProposalId, setAgendaProposalId] = useState<string | null>(null);
   const [gefProposalId, setGefProposalId] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState<"sidebar" | "topbar" | null>(null);
@@ -1302,12 +1370,58 @@ export function GEFShell() {
   }, [refreshPlatform]);
 
   useEffect(() => {
-    window.localStorage.setItem("comunica-farroupilha-ui", serializeUiPreferences({ view, query, themeFilter, statusFilter, sort }));
-  }, [view, query, themeFilter, statusFilter, sort]);
+    window.localStorage.setItem("comunica-farroupilha-ui", serializeUiPreferences({ view, query, themeFilter, statusFilter, sort, notificationFilter, unreadOnly: String(unreadOnly) }));
+  }, [view, query, themeFilter, statusFilter, sort, notificationFilter, unreadOnly]);
+
+  useEffect(() => {
+    if (view !== "proposals" || !pendingProposalScrollId || !state.proposals.some((proposal) => proposal.id === pendingProposalScrollId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`proposal-${pendingProposalScrollId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPendingProposalScrollId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingProposalScrollId, state.proposals, view]);
+
+  useEffect(() => {
+    if (view !== "proposals" || !composerOpen) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("proposal-composer")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [composerOpen, view]);
+
+  useEffect(() => {
+    if (view !== "agenda" || !pendingActivityScrollId || !state.activities.some((activity) => activity.id === pendingActivityScrollId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`activity-${pendingActivityScrollId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPendingActivityScrollId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agendaMonthKey, pendingActivityScrollId, state.activities, view]);
+
+  useEffect(() => {
+    if (view !== "gef" || !gefProposalId) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("gef-proposal-preview")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [gefProposalId, view]);
+
+  useEffect(() => {
+    if (view !== "agenda" || !pendingAgendaProposalScrollId || agendaProposalId !== pendingAgendaProposalScrollId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("agenda-proposal-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPendingAgendaProposalScrollId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agendaProposalId, pendingAgendaProposalScrollId, view]);
+
+  useEffect(() => {
+    if (!activityOpen) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("activity-composer")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [activityOpen]);
 
   const user = state.user;
   const isGef = user?.role === "gef";
   const unread = state.notifications.filter((notification) => !notification.read).length;
+  const visibleNotifications = filterNotifications(state.notifications, notificationFilter, unreadOnly);
 
   const filteredProposals = useMemo(() => {
     return state.proposals
@@ -1344,9 +1458,17 @@ export function GEFShell() {
     if (!user) return [];
     return state.proposals.filter((proposal) => userSavedIds.includes(proposal.id));
   }, [user, state.proposals, userSavedIds]);
-  const agendaActivities = useMemo(() => state.activities.filter((activity) => activity.date.slice(0, 7) === agendaMonthKey), [state.activities, agendaMonthKey]);
+  const agendaActivities = useMemo(() => state.activities.filter((activity) => activity.date.slice(0, 7) === agendaMonthKey).sort((a, b) => a.date.localeCompare(b.date)), [state.activities, agendaMonthKey]);
   const agendaProposal = agendaProposalId ? state.proposals.find((proposal) => proposal.id === agendaProposalId) : undefined;
   const gefProposal = gefProposalId ? state.proposals.find((proposal) => proposal.id === gefProposalId) : undefined;
+  const gefQueue = useMemo(() => state.proposals
+    .filter((proposal) => ["received", "analysis", "development"].includes(proposal.status))
+    .sort((a, b) => ["received", "analysis", "development"].indexOf(a.status) - ["received", "analysis", "development"].indexOf(b.status)), [state.proposals]);
+  const gefThemeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const proposal of state.proposals) counts.set(proposal.theme, (counts.get(proposal.theme) ?? 0) + 1);
+    return Array.from(counts, ([theme, count]) => ({ theme, count })).sort((a, b) => b.count - a.count);
+  }, [state.proposals]);
   const legacyPreview = useMemo(() => legacyState ? previewLegacyState(legacyState.data) : null, [legacyState]);
 
   async function login(name: string, password: string): Promise<string | null> {
@@ -1395,10 +1517,29 @@ export function GEFShell() {
   }
 
   function changeView(next: View) {
-    setView(next);
+    setView(next === "chapas" && !ELECTIONS_ENABLED ? "proposals" : next);
     setProfileOpen(null);
     setComposerOpen(false);
     setActivityOpen(false);
+  }
+
+  function openProposal(id: string) {
+    exploreProposals();
+    setSelectedId(id);
+    setPendingProposalScrollId(id);
+  }
+
+  function openComposer() {
+    changeView("proposals");
+    setComposerOpen(true);
+  }
+
+  function exploreProposals() {
+    setQuery("");
+    setThemeFilter("Todos");
+    setStatusFilter("all");
+    setSort("recent");
+    changeView("proposals");
   }
 
   async function toggleSupport(id: string) {
@@ -1453,7 +1594,7 @@ export function GEFShell() {
     }
   }
 
-  async function createProposal(input: { title: string; body: string; theme: string; anonymous: boolean }) {
+  async function createProposal(input: { title: string; body: string; theme: string }) {
     if (!user) return;
     try {
       const res = await fetch("/api/proposals", {
@@ -1469,10 +1610,23 @@ export function GEFShell() {
         proposals: [newProposal, ...curr.proposals],
         supporters: { ...curr.supporters, [newProposal.id]: [] },
       }));
-      setSelectedId(newProposal.id);
       setComposerOpen(false);
+      openProposal(newProposal.id);
     } catch (err) {
       setInteractionError(err instanceof Error ? err.message : "Não foi possível publicar a proposta.");
+    }
+  }
+
+  async function cancelUserProposal(id: string) {
+    if (!window.confirm("Cancelar esta proposta? Ela continuará visível no histórico com o status Cancelada.")) return;
+    try {
+      const res = await fetch(`/api/proposals/${id}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.data) throw new Error(data.error || "Não foi possível cancelar a proposta.");
+      const updated: Proposal = data.data;
+      setState((curr) => ({ ...curr, proposals: curr.proposals.map((proposal) => proposal.id === id ? updated : proposal) }));
+    } catch (err) {
+      setInteractionError(err instanceof Error ? err.message : "Não foi possível cancelar a proposta.");
     }
   }
 
@@ -1514,7 +1668,7 @@ export function GEFShell() {
     }
   }
 
-  async function addComment(body: string, anonymous: boolean, parentId?: string, proposalIdOverride?: string) {
+  async function addComment(body: string, parentId?: string, proposalIdOverride?: string) {
     if (!user) return;
     const proposalId = proposalIdOverride ?? selected?.id;
     if (!proposalId) return;
@@ -1522,7 +1676,7 @@ export function GEFShell() {
       const res = await fetch(`/api/proposals/${proposalId}/comments`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body, anonymous, ...(parentId ? { parentId } : {}) }),
+        body: JSON.stringify({ body, ...(parentId ? { parentId } : {}) }),
       });
       const data = await res.json();
       if (!res.ok || !data.data) throw new Error(data.error || "Não foi possível publicar o comentário.");
@@ -1582,8 +1736,9 @@ export function GEFShell() {
         activities: [newActivity, ...curr.activities],
         proposals: curr.proposals.map((p) => p.id === activityInput.proposalId ? { ...p, status: "scheduled", updatedAt: "Agora" } : p),
       }));
-      setAgendaMonthKey(newActivity.date.slice(0, 7));
+      setAgendaMonthOverride(newActivity.date.slice(0, 7));
       setAgendaProposalId(newActivity.proposalId);
+      setActivityProposalId("");
       setActivityOpen(false);
       setView("agenda");
     } catch (err) {
@@ -1687,12 +1842,43 @@ export function GEFShell() {
     const previous = state.notifications;
     setState((curr) => ({ ...curr, notifications: curr.notifications.map((n) => ({ ...n, read: true })) }));
     try {
-      const response = await fetch("/api/notifications", { method: "PATCH" });
+      const response = await fetch("/api/notifications", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ all: true }) });
       if (!response.ok) throw new Error("Não foi possível atualizar as notificações.");
     } catch (error) {
-      setState((curr) => ({ ...curr, notifications: previous }));
+      const readById = new Map(previous.map((item) => [item.id, item.read]));
+      setState((curr) => ({ ...curr, notifications: curr.notifications.map((item) => ({ ...item, read: readById.get(item.id) ?? item.read })) }));
       setInteractionError(error instanceof Error ? error.message : "Não foi possível atualizar as notificações.");
     }
+  }
+
+  function openNotification(notification: Notification) {
+    const wasRead = notification.read;
+    if (!wasRead) setState((curr) => ({ ...curr, notifications: curr.notifications.map((item) => item.id === notification.id ? { ...item, read: true } : item) }));
+    if (!wasRead) {
+      void fetch("/api/notifications", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: notification.id }),
+        }).then((response) => {
+          if (!response.ok) throw new Error("Não foi possível marcar a notificação como lida.");
+        }).catch((error: unknown) => {
+        setState((curr) => ({ ...curr, notifications: curr.notifications.map((item) => item.id === notification.id ? { ...item, read: wasRead } : item) }));
+        setInteractionError(error instanceof Error ? error.message : "Não foi possível atualizar a notificação.");
+      });
+    }
+
+    const destination = getNotificationDestination(notification);
+    if (!destination) return;
+    if (destination.view === "agenda") {
+      const activity = state.activities.find((item) => item.id === destination.activityId);
+      if (activity) {
+        setAgendaMonthOverride(activity.date.slice(0, 7));
+        setPendingActivityScrollId(activity.id);
+      }
+      changeView("agenda");
+      return;
+    }
+    openProposal(destination.proposalId);
   }
 
   async function importLegacyData() {
@@ -1778,14 +1964,13 @@ export function GEFShell() {
           <button className={view === "notifications" ? "active" : ""} onClick={() => changeView("notifications")}>
             <Icon name="bell" size={20} />Notificações{unread > 0 && <span className="nav-count">{unread}</span>}
           </button>
-          {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Icon name="grid" size={20} />Visão do GEF</button>}
+          {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Image className="gef-nav-mark" src="/brand/gef.png" alt="" width={21} height={21} />Visão do GEF</button>}
         </nav>
-        <button className="sidebar-create tactile-control" onClick={() => { setComposerOpen(true); setView("proposals"); }}>
+        <button className="sidebar-create tactile-control" onClick={openComposer}>
           <Icon name="plus" size={21} />{isGef ? "Criar consulta" : "Criar proposta"}
         </button>
         <div className="profile-wrap">
           <button className="profile-button" onClick={() => setProfileOpen((open) => open === "sidebar" ? null : "sidebar")}>
-            <Avatar name={user.name} role={user.role} />
             <span><strong>{user.name}</strong><small>{isGef ? "Administrador GEF" : user.turma}</small></span>
             <Icon name="chevron" size={17} />
           </button>
@@ -1807,8 +1992,8 @@ export function GEFShell() {
               <Icon name="bell" size={21} />{unread > 0 && <span>{unread}</span>}
             </button>
             <div className="topbar-profile-wrap">
-              <button className="top-avatar" onClick={() => setProfileOpen((open) => open === "topbar" ? null : "topbar")} aria-label="Abrir menu do perfil">
-                <Avatar name={user.name} role={user.role} small />
+              <button className="top-profile-button" onClick={() => setProfileOpen((open) => open === "topbar" ? null : "topbar")} aria-label={`Abrir menu do perfil de ${user.name}`}>
+                <Icon name="users" size={19} />
               </button>
               {profileOpen === "topbar" && <ProfileMenu onLogout={logout} onReset={resetDemo} />}
             </div>
@@ -1835,7 +2020,7 @@ export function GEFShell() {
                   <h2>Propostas da comunidade</h2>
                   <p>Veja, apoie e comente ideias criadas por estudantes e consultas abertas pelo GEF.</p>
                 </div>
-                <button className="primary-button heading-action tactile-control" onClick={() => setComposerOpen(true)}>
+                <button className="primary-button heading-action tactile-control" onClick={openComposer}>
                   <Icon name="plus" size={17} />{isGef ? "Criar consulta" : "Criar proposta"}
                 </button>
               </section>
@@ -1889,16 +2074,17 @@ export function GEFShell() {
                       supported={userSupportedIds.includes(proposal.id)}
                       saved={userSavedIds.includes(proposal.id)}
                       isGef={isGef}
+                      canCancel={canCancelProposal(proposal, user.id, user.role)}
                       onSelect={() => setSelectedId(proposal.id)}
                       onSupport={() => toggleSupport(proposal.id)}
                       onSave={() => toggleSaved(proposal.id)}
                       onStatus={(status) => changeStatus(proposal.id, status)}
+                      onCancel={() => cancelUserProposal(proposal.id)}
                     />
                     {selected?.id === proposal.id && (
                       <ProposalDetail
                         proposal={proposal}
                         comments={state.comments}
-                        user={user}
                         isGef={isGef}
                         onComment={addComment}
                         onLike={toggleCommentLike}
@@ -1933,7 +2119,7 @@ export function GEFShell() {
                   <Icon name="bookmark" size={26} />
                   <h3>Nenhuma proposta acompanhada</h3>
                   <p>Toque no marcador de uma proposta para guardá-la aqui.</p>
-                  <button type="button" className="primary-button" onClick={() => changeView("proposals")}>
+                  <button type="button" className="primary-button" onClick={exploreProposals}>
                     Explorar propostas <Icon name="arrow" size={15} />
                   </button>
                 </div>
@@ -1947,16 +2133,17 @@ export function GEFShell() {
                         supported={userSupportedIds.includes(proposal.id)}
                         saved={userSavedIds.includes(proposal.id)}
                         isGef={isGef}
+                        canCancel={canCancelProposal(proposal, user.id, user.role)}
                         onSelect={() => setSelectedId(proposal.id)}
                         onSupport={() => toggleSupport(proposal.id)}
                         onSave={() => toggleSaved(proposal.id)}
                         onStatus={(status) => changeStatus(proposal.id, status)}
+                        onCancel={() => cancelUserProposal(proposal.id)}
                       />
                       {selected?.id === proposal.id && (
                         <ProposalDetail
                           proposal={proposal}
                           comments={state.comments}
-                          user={user}
                           isGef={isGef}
                           onComment={addComment}
                           onLike={toggleCommentLike}
@@ -1980,27 +2167,38 @@ export function GEFShell() {
                   <p>Atividades confirmadas, horários, locais e espaço de avaliação pós-recreio.</p>
                 </div>
                 {isGef && (
-                  <button className="primary-button heading-action" onClick={() => setActivityOpen(true)}>
+                  <button className="primary-button heading-action" onClick={() => { setActivityProposalId(""); setActivityOpen(true); }}>
                     <Icon name="plus" size={17} />Nova atividade
                   </button>
                 )}
               </div>
 
               {activityOpen && isGef && (
-                <ActivityComposer proposals={state.proposals} onCancel={() => setActivityOpen(false)} onCreate={createActivity} />
+                <ActivityComposer proposals={state.proposals} initialProposalId={activityProposalId || undefined} onCancel={() => setActivityOpen(false)} onCreate={createActivity} />
               )}
 
-              <div className="agenda-toolbar">
-                <strong>{monthLabel(agendaMonthKey)}</strong>
-                <span className="agenda-view-label">Calendário mensal</span>
-              </div>
+              {agendaMonthKey ? <>
+                <div className="agenda-toolbar">
+                  <strong>{monthLabel(agendaMonthKey)}</strong>
+                  <span className="agenda-view-label">Calendário mensal</span>
+                </div>
 
-              <CalendarMonth
-                activities={agendaActivities}
-                monthKey={agendaMonthKey}
-                onMonthChange={setAgendaMonthKey}
-                onSelect={(proposalId) => { setAgendaProposalId(proposalId); setSelectedId(proposalId); }}
-              />
+                <CalendarMonth
+                  activities={agendaActivities}
+                  monthKey={agendaMonthKey}
+                  todayKey={todayKey}
+                  onMonthChange={setAgendaMonthOverride}
+                  onToday={() => setAgendaMonthOverride(null)}
+                  onSelect={(activityId) => {
+                    const activity = agendaActivities.find((item) => item.id === activityId);
+                    if (activity) {
+                      setAgendaProposalId(activity.proposalId);
+                      setSelectedId(activity.proposalId);
+                      setPendingActivityScrollId(activity.id);
+                    }
+                  }}
+                />
+              </> : <div className="agenda-calendar-loading" aria-busy="true" />}
 
               <div className="agenda-list">
                 {agendaActivities.map((activity) => {
@@ -2008,17 +2206,18 @@ export function GEFShell() {
                   const userFeedback = feedbacks.find((f) => f.userId === user.id);
                   const isDone = activity.status === "done";
                   const isCancelled = activity.status === "cancelled";
+                  const datePassed = activity.status === "upcoming" && !!todayKey && activity.date < todayKey;
 
                   return (
-                    <article className={`activity-card ${isDone ? "is-done" : ""} ${isCancelled ? "is-cancelled" : ""}`} key={activity.id}>
+                    <article id={`activity-${activity.id}`} className={`activity-card ${isDone ? "is-done" : ""} ${isCancelled ? "is-cancelled" : ""}`} key={activity.id}>
                       <div className="activity-date">
                         <strong>{new Date(`${activity.date}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</strong>
                         <span>{new Date(`${activity.date}T12:00:00`).getDate()}</span>
                       </div>
                       <div className="activity-info">
                         <div className="activity-badges">
-                          <span className={`activity-status-badge ${activity.status}`}>
-                            {activity.status === "upcoming" ? "Agendada / Em breve" : activity.status === "done" ? "Realizada" : "Cancelada"}
+                          <span className={`activity-status-badge ${datePassed ? "stale" : activity.status}`}>
+                            {datePassed ? "Aguardando atualização" : activity.status === "upcoming" ? "Agendada / Em breve" : activity.status === "done" ? "Realizada" : "Cancelada"}
                           </span>
                           {feedbacks.length > 0 && (
                             <span className="activity-feedback-count">
@@ -2032,7 +2231,7 @@ export function GEFShell() {
                       </div>
 
                       <div className="activity-actions">
-                        <button className="outline-button" onClick={() => { setAgendaProposalId(activity.proposalId); setSelectedId(activity.proposalId); }}>
+                        <button className="outline-button" onClick={() => { setAgendaProposalId(activity.proposalId); setSelectedId(activity.proposalId); setPendingAgendaProposalScrollId(activity.proposalId); }}>
                           Ver proposta <Icon name="arrow" size={14} />
                         </button>
 
@@ -2066,22 +2265,23 @@ export function GEFShell() {
               )}
 
               {agendaProposal && (
-                <ProposalPreview
-                  proposal={agendaProposal}
-                  comments={state.comments}
-                  user={user}
-                  isGef={isGef}
-                  supported={userSupportedIds.includes(agendaProposal.id)}
-                  saved={userSavedIds.includes(agendaProposal.id)}
-                  onSupport={() => toggleSupport(agendaProposal.id)}
-                  onSave={() => toggleSaved(agendaProposal.id)}
-                  onStatus={(status) => changeStatus(agendaProposal.id, status)}
-                  onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, agendaProposal.id)}
-                  onLike={toggleCommentLike}
-                  likedCommentIds={userLikedCommentIds}
-                  onSubmitGefResponse={submitGefResponse}
-                  onClose={() => setAgendaProposalId(null)}
-                />
+                <div id="agenda-proposal-preview">
+                  <ProposalPreview
+                    proposal={agendaProposal}
+                    comments={state.comments}
+                    isGef={isGef}
+                    supported={userSupportedIds.includes(agendaProposal.id)}
+                    saved={userSavedIds.includes(agendaProposal.id)}
+                    onSupport={() => toggleSupport(agendaProposal.id)}
+                    onSave={() => toggleSaved(agendaProposal.id)}
+                    onStatus={(status) => changeStatus(agendaProposal.id, status)}
+                    onComment={(body, parentId) => addComment(body, parentId, agendaProposal.id)}
+                    onLike={toggleCommentLike}
+                    likedCommentIds={userLikedCommentIds}
+                    onSubmitGefResponse={submitGefResponse}
+                    onClose={() => setAgendaProposalId(null)}
+                  />
+                </div>
               )}
 
               {evaluatingActivity && (
@@ -2121,27 +2321,49 @@ export function GEFShell() {
                   <h2>Notificações</h2>
                   <p>Acompanhe respostas, mudanças e atividades que combinam com sua turma.</p>
                 </div>
-                <button className="text-action" onClick={markAllRead}>Marcar todas como lidas</button>
+                <button type="button" className="text-action" onClick={markAllRead}>Marcar todas como lidas</button>
+              </div>
+              <div className="notification-controls">
+                <div className="notification-filters" role="group" aria-label="Filtrar notificações">
+                  {([
+                    ["all", "Todas"],
+                    ["proposal", "Propostas"],
+                    ["comment", "Conversas"],
+                    ["activity", "Agenda"],
+                    ["system", "Avisos"],
+                  ] as const).map(([filter, label]) => (
+                    <button key={filter} type="button" aria-pressed={notificationFilter === filter} onClick={() => setNotificationFilter(filter)}>{label}</button>
+                  ))}
+                </div>
+                <button type="button" className={`notification-unread-filter ${unreadOnly ? "active" : ""}`} aria-pressed={unreadOnly} onClick={() => setUnreadOnly((value) => !value)}>
+                  <Icon name="bell" size={15} />Não lidas
+                </button>
               </div>
               <div className="notification-list">
-                {state.notifications.map((notification) => (
-                  <button
-                    className={`notification-item ${notification.read ? "is-read" : ""}`}
+                {visibleNotifications.map((notification) => {
+                  const destination = getNotificationDestination(notification);
+                  const icon: Record<NotificationType, string> = { proposal: "spark", comment: "message", activity: "calendar", system: "info" };
+                  return <button
+                    className={`notification-item type-${notification.type} ${notification.read ? "is-read" : ""}`}
                     key={notification.id}
-                    onClick={() => setState((current) => ({
-                      ...current,
-                      notifications: current.notifications.map((item) => item.id === notification.id ? { ...item, read: true } : item),
-                    }))}
+                    onClick={() => openNotification(notification)}
+                    aria-label={`${notification.read ? "" : "Não lida. "}${notification.title}. ${destination ? "Abrir destino" : "Marcar como lida"}`}
                   >
-                    <span className="notification-icon"><Icon name={notification.activityId ? "calendar" : "message"} size={19} /></span>
-                    <span>
+                    <span className={`notification-icon ${notification.type}`}><Icon name={icon[notification.type]} size={19} /></span>
+                    <span className="notification-copy">
                       <strong>{notification.title}{(notification.occurrences ?? 1) > 1 ? ` · ${notification.occurrences} eventos` : ""}</strong>
                       <small>{notification.body}</small>
                       <em>{notification.createdAt}</em>
                     </span>
                     {!notification.read && <span className="unread-dot" />}
-                  </button>
-                ))}
+                    {destination && <span className="notification-open"><Icon name="arrow" size={16} /></span>}
+                  </button>;
+                })}
+                {visibleNotifications.length === 0 && <div className="notification-empty">
+                  <Icon name="bell" size={22} />
+                  <strong>{state.notifications.length ? "Nenhuma notificação com esses filtros" : "Você está em dia"}</strong>
+                  <p>{state.notifications.length ? "Altere a categoria ou mostre todas as notificações." : "Respostas e atividades aparecerão aqui."}</p>
+                </div>}
               </div>
             </section>
           )}
@@ -2151,10 +2373,10 @@ export function GEFShell() {
               <div className="content-heading">
                 <div>
                   <span className="eyebrow">ÁREA EXCLUSIVA</span>
-                  <h2>Visão do GEF</h2>
+                  <h2 className="gef-page-title"><Image src="/brand/gef.png" alt="" width={40} height={40} />Visão do GEF</h2>
                   <p>Encontre assuntos recorrentes, consulte a comunidade e acompanhe os próximos passos.</p>
                 </div>
-                <button className="primary-button heading-action" onClick={() => setActivityOpen(true)}>
+                <button className="primary-button heading-action" onClick={() => { setActivityProposalId(""); setActivityOpen(true); }}>
                   <Icon name="plus" size={17} />Nova atividade
                 </button>
               </div>
@@ -2178,59 +2400,110 @@ export function GEFShell() {
                 </aside>
               )}
 
-              {activityOpen && <ActivityComposer proposals={state.proposals} onCancel={() => setActivityOpen(false)} onCreate={createActivity} />}
+              {activityOpen && <ActivityComposer proposals={state.proposals} initialProposalId={activityProposalId || undefined} onCancel={() => setActivityOpen(false)} onCreate={createActivity} />}
 
               <div className="gef-overview">
-                <div><strong>{state.proposals.length}</strong><span>propostas registradas</span></div>
-                <div><strong>{new Set(state.proposals.map((proposal) => proposal.theme)).size}</strong><span>temas ativos</span></div>
-                <div><strong>{state.proposals.filter((proposal) => proposal.status === "development" || proposal.status === "scheduled").length}</strong><span>em construção</span></div>
+                <div><strong>{state.proposals.filter((proposal) => proposal.status === "received").length}</strong><span>aguardando triagem</span></div>
+                <div><strong>{state.proposals.filter((proposal) => proposal.status === "analysis").length}</strong><span>em análise</span></div>
+                <div><strong>{state.proposals.filter((proposal) => proposal.status === "development" || proposal.status === "scheduled").length}</strong><span>em andamento</span></div>
+                <div><strong>{state.activities.filter((activity) => activity.status === "upcoming" && activity.date >= todayKey).length}</strong><span>atividades futuras</span></div>
               </div>
 
-              <div className="map-heading">
-                <div>
-                  <h3>Mapa de temas</h3>
-                  <p>O tamanho mostra a quantidade de propostas; a cor mostra a situação.</p>
+              <div className="gef-workbench">
+                <section className="gef-worklist" aria-labelledby="gef-worklist-title">
+                  <div className="gef-section-heading">
+                    <div>
+                      <h3 id="gef-worklist-title">Próximas ações</h3>
+                      <p>Propostas ativas organizadas pela etapa de trabalho.</p>
+                    </div>
+                    <strong>{gefQueue.length}</strong>
+                  </div>
+                  {gefQueue.length === 0 ? <p className="gef-queue-empty">Nenhuma proposta aguarda ação.</p> : <div className="gef-task-list">
+                    {gefQueue.map((proposal) => {
+                      const nextAction = proposal.status === "received" ? "Iniciar análise" : proposal.status === "analysis" ? "Iniciar desenvolvimento" : "Agendar atividade";
+                      return <article className="gef-task-row" key={proposal.id}>
+                        <div className="gef-task-copy">
+                          <strong>{proposal.title}</strong>
+                          <small>{proposal.theme} · {proposal.comments} comentários · {proposal.supports} apoios</small>
+                        </div>
+                        <StatusBadge status={proposal.status} />
+                        <div className="gef-task-actions">
+                          <button type="button" className="gef-open-proposal" onClick={() => { setGefProposalId(proposal.id); setSelectedId(proposal.id); }}>Abrir</button>
+                          <button type="button" className="gef-next-action" onClick={() => {
+                            if (proposal.status === "received") void changeStatus(proposal.id, "analysis");
+                            else if (proposal.status === "analysis") void changeStatus(proposal.id, "development");
+                            else { setActivityProposalId(proposal.id); setActivityOpen(true); }
+                          }}>{nextAction}<Icon name="arrow" size={14} /></button>
+                        </div>
+                      </article>;
+                    })}
+                  </div>}
+                </section>
+
+                <aside className="gef-theme-panel" aria-labelledby="gef-theme-title">
+                  <div className="gef-section-heading">
+                    <div>
+                      <h3 id="gef-theme-title">Temas das propostas</h3>
+                      <p>Distribuição por tema.</p>
+                    </div>
+                  </div>
+                  {gefThemeCounts.length === 0 ? <p className="gef-queue-empty">Os temas aparecerão quando houver propostas.</p> : <div className="gef-theme-bars">
+                    {gefThemeCounts.map(({ theme, count }) => <div className="gef-theme-row" key={theme}>
+                      <span>{theme}</span>
+                      <span className="gef-theme-track" role="meter" aria-label={`${theme}: ${count} propostas`} aria-valuemin={0} aria-valuemax={Math.max(...gefThemeCounts.map((item) => item.count))} aria-valuenow={count}>
+                        <i style={{ width: `${count / Math.max(...gefThemeCounts.map((item) => item.count)) * 100}%` }} />
+                      </span>
+                      <strong>{count}</strong>
+                    </div>)}
+                  </div>}
+                </aside>
+              </div>
+
+              <details className="gef-map-details">
+                <summary>Explorar mapa temático</summary>
+                <div className="map-heading">
+                  <div>
+                    <h3>Mapa de temas</h3>
+                    <p>O tamanho mostra a quantidade de propostas; a cor mostra a situação.</p>
+                  </div>
+                  <div className="map-legend">
+                    <span><i className="legend-dot received" />Recebida</span>
+                    <span><i className="legend-dot analysis" />Em análise</span>
+                    <span><i className="legend-dot development" />Em desenvolvimento</span>
+                    <span><i className="legend-dot completed" />Concluída</span>
+                  </div>
                 </div>
-                <div className="map-legend">
-                  <span><i className="legend-dot received" />Recebida</span>
-                  <span><i className="legend-dot analysis" />Em análise</span>
-                  <span><i className="legend-dot development" />Em desenvolvimento</span>
-                  <span><i className="legend-dot completed" />Concluída</span>
+                <GraphMap proposals={state.proposals} onSelect={(id) => { setGefProposalId(id); setSelectedId(id); }} />
+                <div className="map-list">
+                  {state.proposals.map((proposal) => (
+                    <button type="button" key={proposal.id} onClick={() => { setGefProposalId(proposal.id); setSelectedId(proposal.id); }}>
+                      <span className="map-list-status" style={{ background: STATUS[proposal.status]?.color ?? "#6c7d8c" }} />
+                      <span>{proposal.title}</span>
+                      <small>{proposal.theme}</small>
+                      <Icon name="arrow" size={15} />
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              <GraphMap proposals={state.proposals} onSelect={(id) => { setGefProposalId(id); setSelectedId(id); }} />
-
-              <div className="map-list">
-                <h3>Propostas no mapa</h3>
-                {state.proposals.length === 0 && <p className="empty-copy">Nenhuma proposta registrada no mapa ainda.</p>}
-                {state.proposals.map((proposal) => (
-                  <button key={proposal.id} onClick={() => { setGefProposalId(proposal.id); setSelectedId(proposal.id); }}>
-                    <span className="map-list-status" style={{ background: STATUS[proposal.status]?.color ?? "#6c7d8c" }} />
-                    <span>{proposal.title}</span>
-                    <small>{proposal.theme}</small>
-                    <Icon name="arrow" size={15} />
-                  </button>
-                ))}
-              </div>
+              </details>
 
               {gefProposal && (
-                <ProposalPreview
-                  proposal={gefProposal}
-                  comments={state.comments}
-                  user={user}
-                  isGef
-                  supported={userSupportedIds.includes(gefProposal.id)}
-                  saved={userSavedIds.includes(gefProposal.id)}
-                  onSupport={() => toggleSupport(gefProposal.id)}
-                  onSave={() => toggleSaved(gefProposal.id)}
-                  onStatus={(status) => changeStatus(gefProposal.id, status)}
-                  onComment={(body, anonymous, parentId) => addComment(body, anonymous, parentId, gefProposal.id)}
-                  onLike={toggleCommentLike}
-                  likedCommentIds={userLikedCommentIds}
-                  onSubmitGefResponse={submitGefResponse}
-                  onClose={() => setGefProposalId(null)}
-                />
+                <div id="gef-proposal-preview">
+                  <ProposalPreview
+                    proposal={gefProposal}
+                    comments={state.comments}
+                    isGef
+                    supported={userSupportedIds.includes(gefProposal.id)}
+                    saved={userSavedIds.includes(gefProposal.id)}
+                    onSupport={() => toggleSupport(gefProposal.id)}
+                    onSave={() => toggleSaved(gefProposal.id)}
+                    onStatus={(status) => changeStatus(gefProposal.id, status)}
+                    onComment={(body, parentId) => addComment(body, parentId, gefProposal.id)}
+                    onLike={toggleCommentLike}
+                    likedCommentIds={userLikedCommentIds}
+                    onSubmitGefResponse={submitGefResponse}
+                    onClose={() => setGefProposalId(null)}
+                  />
+                </div>
               )}
             </section>
           )}
@@ -2242,7 +2515,7 @@ export function GEFShell() {
           <button className={view === "agenda" ? "active" : ""} onClick={() => changeView("agenda")}><Icon name="calendar" size={20} /><span>Agenda</span></button>
           {ELECTIONS_ENABLED && <button className={view === "chapas" ? "active" : ""} onClick={() => changeView("chapas")}><Icon name="users" size={20} /><span>Chapas</span></button>}
           <button className={view === "notifications" ? "active" : ""} onClick={() => changeView("notifications")}><Icon name="bell" size={20} /><span>Notificações</span>{unread > 0 && <b>{unread}</b>}</button>
-          {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Icon name="grid" size={20} /><span>GEF</span></button>}
+          {isGef && <button className={view === "gef" ? "active" : ""} onClick={() => changeView("gef")}><Image className="gef-nav-mark" src="/brand/gef.png" alt="" width={22} height={22} /><span>GEF</span></button>}
         </nav>
       </div>
     </div>

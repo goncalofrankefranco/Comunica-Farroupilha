@@ -67,13 +67,14 @@ function dateOnly(value: Date | string) {
   return value.toISOString().slice(0, 10);
 }
 
-function mapProposal(row: ProposalRow, revealAnonymousIdentity = false): ProposalRecord {
+function mapProposal(row: ProposalRow, revealAnonymousIdentity = false, viewerId?: string): ProposalRecord {
+  const canViewAuthor = revealAnonymousIdentity || row.author_id === viewerId;
   return {
     id: row.id,
     title: row.title,
     body: row.body,
-    author: row.anonymous && !revealAnonymousIdentity ? "" : row.author_name,
-    authorId: row.anonymous && !revealAnonymousIdentity ? "" : row.author_id ?? "",
+    author: row.anonymous && !canViewAuthor ? "" : row.author_name,
+    authorId: row.anonymous && !canViewAuthor ? "" : row.author_id ?? "",
     anonymous: row.anonymous,
     theme: row.theme,
     status: row.status,
@@ -135,9 +136,13 @@ export async function getPlatformSnapshot(userId?: string): Promise<PlatformSnap
     query<ProposalRow>(`${proposalSelect} ORDER BY p.created_at DESC`),
     query<CommentRow>(`SELECT c.*, (SELECT count(*)::int FROM comment_likes cl WHERE cl.comment_id = c.id) AS likes FROM comments c ORDER BY c.created_at`),
     query<ActivityRow>("SELECT id, proposal_id, title, activity_date, time_label, place, audience, status FROM activities ORDER BY activity_date"),
-    query<NotificationRow>(`SELECT n.id, n.title, n.body, n.activity_id, n.created_at, n.dedupe_key, n.occurrence_count,
-      ${userId ? "EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.notification_id = n.id AND nr.user_id = $1)" : "false"} AS read
-      FROM notifications n ORDER BY n.created_at DESC`, params),
+    userId ? query<NotificationRow>(`SELECT n.id, n.title, n.body, n.notification_type, n.activity_id, n.proposal_id,
+      n.created_at, n.dedupe_key, n.occurrence_count,
+      EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.notification_id = n.id AND nr.user_id = $1) AS read
+      FROM notifications n
+      WHERE (n.recipient_user_id IS NULL OR n.recipient_user_id = $1)
+        AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $1))
+      ORDER BY n.created_at DESC`, params) : Promise.resolve([]),
     query<QueryResultRow & { proposal_id: string; id: string; username: string; class_name: string; anonymous: boolean }>(
       `SELECT ps.proposal_id, u.id, u.username, u.class_name, p.anonymous
        FROM proposal_supports ps
@@ -175,7 +180,7 @@ export async function getPlatformSnapshot(userId?: string): Promise<PlatformSnap
   }));
 
   return {
-    proposals: proposalRows.map((row) => mapProposal(row, revealAnonymousIdentity)),
+    proposals: proposalRows.map((row) => mapProposal(row, revealAnonymousIdentity, userId)),
     comments: commentRows.map((row) => mapComment(row, revealAnonymousIdentity)),
     activities: activityRows.map(mapActivity),
     notifications,
@@ -201,8 +206,11 @@ export async function createProposal(input: {
     );
     await createNotification(tx, {
       dedupeKey: notificationKey("proposal", id, "created"),
-      title: "Nova proposta recebida",
-      body: `${input.anonymous ? "Uma pessoa estudante" : input.author} publicou uma ideia para o recreio.`,
+      title: "Nova proposta para análise",
+      body: `“${input.title.slice(0, 80)}” sobre ${input.theme} aguarda triagem do GEF.`,
+      type: "proposal",
+      proposalId: id,
+      recipientRole: "gef",
     });
   });
   return (await getProposal(id))!;
@@ -231,18 +239,25 @@ export async function addComment(proposalId: string, input: {
 }) {
   const id = randomUUID();
   await transaction(async (tx) => {
-    const exists = await tx<{ exists: boolean }>("SELECT EXISTS (SELECT 1 FROM proposals WHERE id = $1) AS exists", [proposalId]);
-    if (!exists[0]?.exists) throw new Error("PROPOSAL_NOT_FOUND");
+    const proposals = await tx<{ author_id: string | null; title: string }>("SELECT author_id, title FROM proposals WHERE id = $1", [proposalId]);
+    if (!proposals[0]) throw new Error("PROPOSAL_NOT_FOUND");
     await tx(
       `INSERT INTO comments (id, proposal_id, author_id, author_name, author_role, anonymous, body, parent_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, proposalId, input.authorId, input.author, input.role, input.anonymous, input.body, input.parentId ?? null],
     );
     await tx("UPDATE proposals SET updated_at = now() WHERE id = $1", [proposalId]);
-    await createNotification(tx, {
+    const commentRecipient = input.role === "student" ? { recipientRole: "gef" as const }
+      : proposals[0].author_id && proposals[0].author_id !== input.authorId ? { recipientUserId: proposals[0].author_id } : null;
+    if (commentRecipient) await createNotification(tx, {
       dedupeKey: notificationKey("comment", id, "created"),
-      title: "Nova interação na comunidade",
-      body: `${input.anonymous ? "Uma pessoa estudante" : input.author} comentou uma proposta.`,
+      title: input.role === "gef" ? "Resposta do GEF" : "Nova contribuição em proposta",
+      body: input.role === "gef"
+        ? `O GEF respondeu à proposta “${proposals[0].title.slice(0, 70)}”.`
+        : `Uma nova contribuição em “${proposals[0].title.slice(0, 70)}” aguarda leitura do GEF.`,
+      type: "comment",
+      proposalId,
+      ...commentRecipient,
     });
   });
   const rows = await query<CommentRow>(
@@ -329,44 +344,54 @@ export async function setCommentLike(commentId: string, userId: string, liked: b
 }
 
 export async function updateProposalStatus(proposalId: string, status: ProposalStatus, gefResponse?: string) {
-  const updated = await transaction(async (tx) => {
-    const rows = await tx<{ id: string; title: string }>(
+  await transaction(async (tx) => {
+    const rows = await tx<{ id: string; title: string; author_id: string | null }>(
       `UPDATE proposals
        SET status = $2,
            gef_response = CASE WHEN $3::text IS NULL OR btrim($3) = '' THEN gef_response ELSE btrim($3) END,
            gef_response_at = CASE WHEN $3::text IS NULL OR btrim($3) = '' THEN gef_response_at ELSE now() END,
            updated_at = now()
        WHERE id = $1
-       RETURNING id, title`,
+         AND (status IS DISTINCT FROM $2 OR ($3::text IS NOT NULL AND btrim($3) IS DISTINCT FROM gef_response))
+       RETURNING id, title, author_id`,
       [proposalId, status, gefResponse ?? null],
     );
     if (!rows[0]) return false;
+    const statusLabels: Record<ProposalStatus, string> = {
+      received: "recebida", analysis: "em análise", development: "em desenvolvimento",
+      scheduled: "agendada", completed: "concluída", archived: "arquivada", cancelled: "cancelada",
+    };
     await createNotification(tx, {
       dedupeKey: notificationKey("proposal", proposalId, `status:${status}:${gefResponse ?? ""}`),
-      title: "Atualização de proposta",
-      body: `A proposta "${rows[0].title.slice(0, 30)}..." agora está: ${status}.`,
+      title: "Situação da proposta atualizada",
+      body: `“${rows[0].title.slice(0, 70)}” está ${statusLabels[status]}.`,
+      type: "proposal",
+      proposalId,
+      ...(rows[0].author_id ? { recipientUserId: rows[0].author_id } : {}),
     });
-    return true;
   });
-  return updated ? getProposal(proposalId) : null;
+  return getProposal(proposalId) ?? null;
 }
 
 export async function updateProposalGefResponse(proposalId: string, gefResponse: string) {
-  const updated = await transaction(async (tx) => {
-    const rows = await tx<{ id: string; title: string }>(
+  await transaction(async (tx) => {
+    const rows = await tx<{ id: string; title: string; author_id: string | null }>(
       `UPDATE proposals SET gef_response = btrim($2), gef_response_at = now(), updated_at = now()
-       WHERE id = $1 RETURNING id, title`,
+       WHERE id = $1 AND gef_response IS DISTINCT FROM btrim($2)
+       RETURNING id, title, author_id`,
       [proposalId, gefResponse],
     );
-    if (!rows[0]) return false;
+    if (!rows[0]) return;
     await createNotification(tx, {
       dedupeKey: notificationKey("proposal", proposalId, `response:${createHash("sha256").update(gefResponse).digest("hex")}`),
       title: "Resposta oficial do GEF",
-      body: `O GEF respondeu a proposta "${rows[0].title.slice(0, 30)}...".`,
+      body: `O GEF respondeu à proposta “${rows[0].title.slice(0, 70)}”.`,
+      type: "proposal",
+      proposalId,
+      ...(rows[0].author_id ? { recipientUserId: rows[0].author_id } : {}),
     });
-    return true;
   });
-  return updated ? getProposal(proposalId) : null;
+  return getProposal(proposalId) ?? null;
 }
 
 export async function getActivity(activityId: string) {
@@ -404,9 +429,12 @@ export async function getComment(commentId: string) {
 
 export async function getNotifications(userId: string) {
   const rows = await query<NotificationRow>(
-    `SELECT n.id, n.title, n.body, n.activity_id, n.created_at, n.dedupe_key, n.occurrence_count,
+    `SELECT n.id, n.title, n.body, n.notification_type, n.activity_id, n.proposal_id, n.created_at, n.dedupe_key, n.occurrence_count,
        EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.notification_id = n.id AND nr.user_id = $1) AS read
-     FROM notifications n ORDER BY n.created_at DESC`,
+     FROM notifications n
+     WHERE (n.recipient_user_id IS NULL OR n.recipient_user_id = $1)
+       AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $1))
+     ORDER BY n.created_at DESC`,
     [userId],
   );
   return collapseNotifications(rows).map((notification) => ({
@@ -422,7 +450,8 @@ export async function createActivity(input: {
   const created = await transaction(async (tx) => {
     const inserted = await tx<{ id: string }>(
       `INSERT INTO activities (id, proposal_id, title, activity_date, time_label, place, audience)
-       SELECT $1, p.id, $3, $4::date, $5, $6, $7 FROM proposals p WHERE p.id = $2
+       SELECT $1, p.id, $3, $4::date, $5, $6, $7 FROM proposals p
+       WHERE p.id = $2 AND p.status IN ('analysis', 'development')
        RETURNING id`,
       [id, input.proposalId, input.title, input.date, input.time, input.place, input.audience],
     );
@@ -432,7 +461,10 @@ export async function createActivity(input: {
       dedupeKey: notificationKey("activity", id, "created"),
       title: "Nova atividade na agenda",
       body: `${input.title} foi adicionada à agenda do recreio.`,
+      type: "activity",
       activityId: id,
+      proposalId: input.proposalId,
+      recipientRole: "student",
     });
     return true;
   });
@@ -534,9 +566,59 @@ export async function getChapaQuestions(chapaId?: string, area?: string) {
 export async function markAllNotificationsRead(userId: string) {
   await query(
     `INSERT INTO notification_reads (notification_id, user_id)
-     SELECT id, $1 FROM notifications ON CONFLICT DO NOTHING`,
+     SELECT n.id, $1 FROM notifications n
+     WHERE (n.recipient_user_id IS NULL OR n.recipient_user_id = $1)
+       AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $1))
+     ON CONFLICT DO NOTHING`,
     [userId],
   );
+}
+
+export async function markNotificationRead(userId: string, notificationId: string) {
+  const rows = await query<{ notification_id: string }>(
+    `INSERT INTO notification_reads (notification_id, user_id)
+     SELECT n.id, $2 FROM notifications n
+     WHERE n.id = $1
+       AND (n.recipient_user_id IS NULL OR n.recipient_user_id = $2)
+       AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $2))
+     ON CONFLICT DO NOTHING
+     RETURNING notification_id`,
+    [notificationId, userId],
+  );
+  if (rows[0]) return true;
+  const existing = await query<{ read: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM notification_reads nr JOIN notifications n ON n.id = nr.notification_id
+       WHERE nr.notification_id = $1 AND nr.user_id = $2
+         AND (n.recipient_user_id IS NULL OR n.recipient_user_id = $2)
+         AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $2))
+     ) AS read`,
+    [notificationId, userId],
+  );
+  return Boolean(existing[0]?.read);
+}
+
+export async function cancelProposal(proposalId: string, authorId: string) {
+  const cancelled = await transaction(async (tx) => {
+    const rows = await tx<{ id: string; title: string }>(
+      `UPDATE proposals SET status = 'cancelled', updated_at = now()
+       WHERE id = $1 AND author_id = $2 AND origin = 'student'
+         AND status IN ('received', 'analysis', 'development')
+       RETURNING id, title`,
+      [proposalId, authorId],
+    );
+    if (!rows[0]) return;
+    await createNotification(tx, {
+      dedupeKey: notificationKey("proposal", proposalId, "cancelled"),
+      title: "Proposta retirada pelo autor",
+      body: `A proposta "${rows[0].title.slice(0, 60)}" foi cancelada antes do agendamento.`,
+      type: "proposal",
+      proposalId,
+      recipientRole: "gef",
+    });
+    return true;
+  });
+  return cancelled ? getProposal(proposalId) : null;
 }
 
 type ImportCounts = { proposals: number; comments: number; activities: number; chapaQuestions: number };

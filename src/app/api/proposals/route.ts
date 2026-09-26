@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       title, body: text, theme,
       author: user.role === "gef" ? "Grêmio Estudantil Farroupilha" : user.name,
       authorId: user.id,
-      anonymous: user.role === "gef" ? false : body.anonymous === true,
+      anonymous: false,
       origin: user.role === "gef" ? "gef" : "student",
     });
     return dataResponse(proposal, { status: 201 });
