@@ -160,13 +160,9 @@ test("proposal metadata uses one creation timestamp consistently", () => {
   assert.match(shellSource, /ELECTIONS_ENABLED &&/);
 });
 
-test("student auth offers signup without OAuth or legacy-link controls", () => {
-  assert.match(shellSource, /Criar conta/);
-  assert.match(shellSource, /onSignup/);
-  assert.match(shellSource, /Turma/);
-  assert.doesNotMatch(shellSource, /Vincular histórico/);
-  assert.doesNotMatch(shellSource, /fetch\("\/api\/auth\/link-legacy"/);
-  assert.doesNotMatch(shellSource, /\/api\/auth\/google\?mode=link/);
-  assert.doesNotMatch(shellSource, /className="legacy-link-form"/);
-  assert.doesNotMatch(shellSource, /Continuar com Google/);
+test("student login offers a verified Google flow to preserve legacy account history", () => {
+  assert.match(shellSource, /Vincular histórico/);
+  assert.match(shellSource, /fetch\("\/api\/auth\/link-legacy"/);
+  assert.match(shellSource, /\/api\/auth\/google\?mode=link/);
+  assert.match(shellSource, /className="legacy-link-form"/);
 });

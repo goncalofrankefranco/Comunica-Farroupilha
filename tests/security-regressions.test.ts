@@ -4,22 +4,16 @@ import { test } from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-test("student login and self-service signup are gated by the temporary password flag", () => {
+test("student password login is temporary and gated without reopening signup", () => {
   const signup = read("src/app/api/auth/signup/route.ts");
   const login = read("src/app/api/auth/login/route.ts");
   const shell = read("src/components/gefshell.tsx");
 
-  assert.match(signup, /STUDENT_PASSWORD_AUTH_ENABLED !== "true"/);
-  assert.match(signup, /hashPassword/);
-  assert.match(signup, /createStudentAccount/);
-  assert.match(signup, /startSession/);
-  assert.match(signup, /enforceRequestLimit/);
-  assert.match(signup, /23505/);
+  assert.match(signup, /status:\s*410/);
+  assert.doesNotMatch(signup, /hashPassword|createAccount|startSession/);
   assert.match(login, /canUsePasswordLogin/);
   assert.match(login, /STUDENT_PASSWORD_AUTH_ENABLED === "true"/);
-  assert.match(shell, /onSignup/);
-  assert.match(shell, /Criar conta/);
-  assert.doesNotMatch(shell, /Já tinha uma conta\? Vincular histórico|legacy-link-form/);
+  assert.doesNotMatch(shell, /onSignup|Criar conta|Criar minha conta/);
 });
 
 test("legacy account recovery verifies the old password before requiring Google OAuth", () => {

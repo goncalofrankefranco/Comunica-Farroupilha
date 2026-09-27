@@ -14,8 +14,8 @@ Variáveis obrigatórias, sempre fora do Git:
 - `DATABASE_URL_UNPOOLED`: conexão preferida pelo migrador;
 - `RATE_LIMIT_SECRET`: segredo recomendado para HMAC das chaves de limite; por compatibilidade, o código ainda aceita `DATABASE_URL` como fallback;
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_CLASS`: seed controlado da conta GEF.
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`: necessários para reativar o login Google verificado; não são exigidos enquanto o modo temporário de senha estiver ativo.
-- `STUDENT_PASSWORD_AUTH_ENABLED`: modo temporário de autenticação dos estudantes, padrão `false`; quando `true`, libera login por senha para contas estudantis existentes e cadastro de novas contas com usuário, turma e senha. O cadastro fica sujeito a limite compartilhado de tentativas, hash `scrypt` e nome de usuário único. As contas criadas nesse modo não têm email escolar verificado; desative a flag quando o Google estiver pronto e antes de retomar a exigência de identidade escolar.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`: obrigatórios para autenticação dos estudantes.
+- `STUDENT_PASSWORD_AUTH_ENABLED`: fallback temporário, padrão `false`; quando `true`, libera senha somente para estudantes existentes com hash armazenado.
 
 Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para um banco isolado. O runner e `pnpm db:migrate:test` recusam uma URL equivalente a `DATABASE_URL` ou `DATABASE_URL_UNPOOLED`, mesmo com `ALLOW_REMOTE_TEST_DATABASE=true`. `db:migrate:test` usa somente `TEST_DATABASE_URL` e nunca recorre às URLs da aplicação. Um banco remoto de teste só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; nunca use produção para testes.
 
@@ -25,12 +25,12 @@ Contas são persistidas no banco. A senha é armazenada somente como hash `scryp
 
 O cookie usa `SameSite=Lax`, caminho `/`, duração de sete dias e `Secure` em produção. Logout revoga a sessão no banco. Nenhum endpoint público devolve hashes, tokens ou a lista de contas.
 
-O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Para preservar o histórico de uma conta antiga de estudante, o endpoint de vínculo legado continua disponível, mas o fluxo foi removido da interface. Enquanto o OAuth estiver indisponível, `STUDENT_PASSWORD_AUTH_ENABLED=true` permite login de estudantes existentes e cadastro temporário de novas contas com usuário, turma e senha, sem verificação do domínio escolar; a flag deve voltar a `false` quando o login Google estiver configurado. Contas GEF continuam usando senha.
+O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Para preservar o histórico de uma conta antiga de estudante, a tela de entrada permite confirmar uma vez o usuário e a senha antigos e, em seguida, exige a verificação Google escolar. O token de vínculo é aleatório, fica somente em cookie `HttpOnly` e como hash no banco, expira em 10 minutos e só pode ser usado uma vez. Após o vínculo, a senha antiga é apagada e o mesmo registro de usuário continua dono das propostas e interações. Enquanto o OAuth estiver indisponível, `STUDENT_PASSWORD_AUTH_ENABLED=true` permite temporariamente entrar por senha em contas estudantis existentes que ainda tenham hash; essa flag não reabre cadastro e deve voltar a `false` quando o login Google estiver configurado. Contas GEF continuam usando senha.
 
 ## Endpoints
 
 - `GET /api/health`: confirma processo e conexão com o banco; falha com 503 quando o Neon está indisponível.
-- `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`; `POST /api/auth/signup` cria uma conta estudantil e inicia sessão somente quando `STUDENT_PASSWORD_AUTH_ENABLED=true`.
+- `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`; `POST /api/auth/signup` retorna 410.
 - `POST /api/auth/link-legacy`: inicia a recuperação de histórico com as credenciais antigas; não cria sessão antes da verificação Google.
 - `GET /api/auth/google` e `GET /api/auth/google/callback`.
 - `POST /api/proposals/:id/cancel`: apenas o autor pode cancelar antes do agendamento.
