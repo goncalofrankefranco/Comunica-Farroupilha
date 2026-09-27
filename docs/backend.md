@@ -12,10 +12,11 @@ Variáveis obrigatórias, sempre fora do Git:
 
 - `DATABASE_URL`: conexão usada pela aplicação;
 - `DATABASE_URL_UNPOOLED`: conexão preferida pelo migrador;
-- `RATE_LIMIT_SECRET`: segredo opcional para HMAC das chaves de limite; por padrão, usa `DATABASE_URL`;
+- `RATE_LIMIT_SECRET`: segredo recomendado para HMAC das chaves de limite; por compatibilidade, o código ainda aceita `DATABASE_URL` como fallback;
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_CLASS`: seed controlado da conta GEF.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`: obrigatórios para autenticação dos estudantes.
 
-Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para localhost. Um banco remoto só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; não use os bancos de produção para testes.
+Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para um banco isolado. O runner recusa uma URL equivalente a `DATABASE_URL` ou `DATABASE_URL_UNPOOLED`, mesmo com `ALLOW_REMOTE_TEST_DATABASE=true`. Um banco remoto de teste só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; nunca use produção para testes.
 
 ## Autenticação
 
@@ -23,12 +24,13 @@ Contas são persistidas no banco. A senha é armazenada somente como hash `scryp
 
 O cookie usa `SameSite=Lax`, caminho `/`, duração de sete dias e `Secure` em produção. Logout revoga a sessão no banco. Nenhum endpoint público devolve hashes, tokens ou a lista de contas.
 
-O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Contas antigas de estudantes também precisam ter o email escolar vinculado para preservar a identidade e o histórico. Foto, token e ID token não são armazenados. Cadastro e login por senha de estudantes estão desativados; a senha continua disponível somente para a conta operacional do GEF.
+O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Para preservar o histórico de uma conta antiga de estudante, a tela de entrada permite confirmar uma vez o usuário e a senha antigos e, em seguida, exige a verificação Google escolar. O token de vínculo é aleatório, fica somente em cookie `HttpOnly` e como hash no banco, expira em 10 minutos e só pode ser usado uma vez. Após o vínculo, a senha antiga é apagada e o mesmo registro de usuário continua dono das propostas e interações. Cadastro e login por senha de estudantes continuam desativados; a senha só serve para iniciar esse vínculo e para a conta operacional do GEF.
 
 ## Endpoints
 
 - `GET /api/health`: confirma processo e conexão com o banco; falha com 503 quando o Neon está indisponível.
 - `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`; `POST /api/auth/signup` retorna 410.
+- `POST /api/auth/link-legacy`: inicia a recuperação de histórico com as credenciais antigas; não cria sessão antes da verificação Google.
 - `GET /api/auth/google` e `GET /api/auth/google/callback`.
 - `POST /api/proposals/:id/cancel`: apenas o autor pode cancelar antes do agendamento.
 - `GET/POST /api/proposals`.
@@ -79,8 +81,8 @@ pnpm typecheck
 pnpm build
 ```
 
-As migrações desta entrega são aditivas. Antes de mudanças destrutivas futuras, criar backup no Neon e uma migration reversível. O rate limiting distribuído cobre login, leituras públicas e gravações de conteúdo. A configuração do WAF da Vercel não é inspecionada por este repositório e continua recomendada como proteção anterior à execução das funções.
+As migrações desta entrega são aditivas. Antes de mudanças destrutivas futuras, criar backup no Neon e uma migration reversível. O rate limiting distribuído cobre login, leituras públicas e gravações de conteúdo. O WAF da Vercel é administrado fora do repositório; as regras de observação precisam ser publicadas no painel/CLI e os eventos revisados antes de trocar qualquer regra para bloqueio.
 
 O seed GEF atualiza somente um usuário que já tenha papel `gef`. Se `ADMIN_USERNAME` colidir com uma conta de estudante, escolha outro nome; o seed não promove nem reaproveita a sessão dessa conta.
 
-Antes de publicar esta versão, executar `pnpm db:migrate` contra o banco configurado, incluindo `0005_participation_workflows.sql`, `0006_google_auth.sql` e `0007_request_rate_limits.sql`. Registrar a URL exata do callback Google como URI autorizada no console OAuth.
+Antes de publicar esta versão, executar `pnpm db:migrate` contra o banco configurado, incluindo `0005_participation_workflows.sql`, `0006_google_auth.sql`, `0007_request_rate_limits.sql` e `0008_legacy_google_account_linking.sql`. Registrar a URL exata do callback Google como URI autorizada no console OAuth. Os valores OAuth devem estar configurados nos ambientes Production e Preview da Vercel.

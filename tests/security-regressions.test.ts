@@ -15,6 +15,35 @@ test("only verified Google identities can create or use student accounts", () =>
   assert.doesNotMatch(shell, /onSignup|Criar conta|Criar minha conta/);
 });
 
+test("legacy account recovery verifies the old password before requiring Google OAuth", () => {
+  const linkRoute = read("src/app/api/auth/link-legacy/route.ts");
+  const googleCallback = read("src/app/api/auth/google/callback/route.ts");
+
+  assert.match(linkRoute, /account\.user\.role !== "student"/);
+  assert.match(linkRoute, /verifyPassword\(credentials\.password, account\.passwordHash\)/);
+  assert.match(linkRoute, /createLegacyGoogleLinkAttempt/);
+  assert.doesNotMatch(linkRoute, /startSession/);
+  assert.match(googleCallback, /isAllowedGoogleIdentity\(claims\)/);
+  assert.match(googleCallback, /completeLegacyGoogleAccountLink/);
+});
+
+test("legacy recovery stores a short-lived hashed token and consumes it only after Google verification", () => {
+  const linkRoute = read("src/app/api/auth/link-legacy/route.ts");
+  const googleStart = read("src/app/api/auth/google/route.ts");
+  const googleCallback = read("src/app/api/auth/google/callback/route.ts");
+  const authRepository = read("src/lib/auth-repository.ts");
+
+  assert.match(linkRoute, /hashSessionToken\(rawToken\)/);
+  assert.match(linkRoute, /httpOnly:\s*true/);
+  assert.match(linkRoute, /sameSite:\s*["']lax["']/);
+  assert.match(linkRoute, /LEGACY_LINK_TTL_SECONDS\s*=\s*10\s*\*\s*60/);
+  assert.doesNotMatch(linkRoute, /startSession/);
+  assert.match(googleStart, /hasLegacyGoogleLinkAttempt/);
+  assert.match(googleCallback, /isAllowedGoogleIdentity\(claims\)/);
+  assert.match(googleCallback, /completeLegacyGoogleAccountLink\(hashSessionToken/);
+  assert.match(authRepository, /password_hash = NULL/);
+});
+
 test("admin seeding cannot promote a pre-existing student account", () => {
   const auth = read("src/lib/auth-repository.ts");
   const seed = read("scripts/seed-admin.ts");
@@ -46,6 +75,8 @@ test("auth error messages use an own-key allowlist", async () => {
   assert.equal(getAuthErrorMessage("google-domain"), "Use uma conta escolar verificada @farroups.com.br.");
   assert.equal(getAuthErrorMessage("__proto__"), "");
   assert.equal(getAuthErrorMessage("constructor"), "");
+  assert.match(getAuthErrorMessage("legacy-link-expired"), /v.ncul/i);
+  assert.match(getAuthErrorMessage("legacy-link-conflict"), /outra conta/i);
 });
 
 test("comments cannot cross proposal threads or commit after cancellation", () => {

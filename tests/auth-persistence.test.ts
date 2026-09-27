@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { Pool } from "@neondatabase/serverless";
@@ -54,6 +54,93 @@ test("database sessions expire and can be revoked without storing raw tokens", {
     assert.equal(await auth.getSessionUser(tokenHash), undefined);
   } finally {
     await pool.query("DELETE FROM users WHERE id = $1", [account.id]);
+    await pool.end();
+  }
+});
+
+test("legacy Google linking preserves the student record and consumes its token once", { skip: !testDatabaseUrl }, async () => {
+  const auth = await import("../src/lib/auth-repository.ts");
+  const { hashPassword } = await import("../src/lib/password.ts");
+  const { createSessionToken, hashSessionToken } = await import("../src/lib/session-token.ts");
+  const pool = new Pool({ connectionString: testDatabaseUrl! });
+  const userId = randomUUID();
+  const proposalId = randomUUID();
+  const username = `legacy-${randomBytes(8).toString("hex")}`;
+  const rawToken = createSessionToken();
+  const tokenHash = hashSessionToken(rawToken);
+
+  try {
+    await pool.query(
+      `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash)
+       VALUES ($1, $2, $3, $4, 'student', $5)`,
+      [userId, username, auth.normalizeUsername(username), "9º ano", await hashPassword("senha-legada-segura")],
+    );
+    await pool.query(
+      `INSERT INTO proposals (id, title, body, author_id, author_name, theme)
+       VALUES ($1, 'Histórico preservado', 'Esta proposta confirma que o mesmo estudante permanece vinculado.', $2, $3, 'Convivência')`,
+      [proposalId, userId, username],
+    );
+    await auth.createLegacyGoogleLinkAttempt(userId, tokenHash, new Date(Date.now() + 60_000));
+
+    const linked = await auth.completeLegacyGoogleAccountLink(tokenHash, {
+      email: "ana@farroups.com.br",
+      sub: "google-sub-legacy-test",
+    });
+    const persisted = await pool.query("SELECT email, google_sub, password_hash FROM users WHERE id = $1", [userId]);
+    const history = await pool.query("SELECT author_id FROM proposals WHERE id = $1", [proposalId]);
+
+    assert.equal(linked.id, userId);
+    assert.equal(persisted.rows[0]?.email, "ana@farroups.com.br");
+    assert.equal(persisted.rows[0]?.google_sub, "google-sub-legacy-test");
+    assert.equal(persisted.rows[0]?.password_hash, null);
+    assert.equal(history.rows[0]?.author_id, userId);
+    await assert.rejects(auth.completeLegacyGoogleAccountLink(tokenHash, {
+      email: "ana@farroups.com.br",
+      sub: "google-sub-legacy-test",
+    }), /LEGACY_LINK_EXPIRED/);
+  } finally {
+    await pool.query("DELETE FROM proposals WHERE id = $1", [proposalId]);
+    await pool.query("DELETE FROM users WHERE id = $1", [userId]);
+    await pool.end();
+  }
+});
+
+test("legacy Google linking cannot claim an identity already attached to another user", { skip: !testDatabaseUrl }, async () => {
+  const auth = await import("../src/lib/auth-repository.ts");
+  const { hashPassword } = await import("../src/lib/password.ts");
+  const { createSessionToken, hashSessionToken } = await import("../src/lib/session-token.ts");
+  const pool = new Pool({ connectionString: testDatabaseUrl! });
+  const legacyUserId = randomUUID();
+  const linkedUserId = randomUUID();
+  const suffix = randomBytes(8).toString("hex");
+  const legacyUsername = `legacy-${suffix}`;
+  const linkedUsername = `google-${suffix}`;
+  const email = `student-${suffix}@farroups.com.br`;
+  const sub = `google-sub-${suffix}`;
+  const tokenHash = hashSessionToken(createSessionToken());
+
+  try {
+    await pool.query(
+      `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash)
+       VALUES ($1, $2, $3, '9º ano', 'student', $4)`,
+      [legacyUserId, legacyUsername, auth.normalizeUsername(legacyUsername), await hashPassword("senha-legada-segura")],
+    );
+    await pool.query(
+      `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash, email, google_sub)
+       VALUES ($1, $2, $3, '9º ano', 'student', NULL, $4, $5)`,
+      [linkedUserId, linkedUsername, auth.normalizeUsername(linkedUsername), email, sub],
+    );
+    await auth.createLegacyGoogleLinkAttempt(legacyUserId, tokenHash, new Date(Date.now() + 60_000));
+
+    await assert.rejects(
+      auth.completeLegacyGoogleAccountLink(tokenHash, { email, sub }),
+      /LEGACY_LINK_CONFLICT/,
+    );
+    const unchanged = await pool.query("SELECT email, google_sub FROM users WHERE id = $1", [legacyUserId]);
+    assert.equal(unchanged.rows[0]?.email, null);
+    assert.equal(unchanged.rows[0]?.google_sub, null);
+  } finally {
+    await pool.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [[legacyUserId, linkedUserId]]);
     await pool.end();
   }
 });

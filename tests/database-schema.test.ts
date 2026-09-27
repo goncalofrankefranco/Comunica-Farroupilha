@@ -64,6 +64,14 @@ test("Google migration links verified identities without requiring a local passw
   assert.match(source, /users_google_sub_unique_idx/);
 });
 
+test("legacy Google account linking stores one-time expiring token hashes", () => {
+  const source = readFileSync("db/migrations/0008_legacy_google_account_linking.sql", "utf8");
+  assert.match(source, /CREATE TABLE IF NOT EXISTS legacy_google_link_tokens/);
+  assert.match(source, /token_hash TEXT PRIMARY KEY/);
+  assert.match(source, /user_id UUID NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/);
+  assert.match(source, /expires_at TIMESTAMPTZ NOT NULL/);
+});
+
 test("rate limit migration stores hashed, expiring shared request budgets", () => {
   const source = readFileSync("db/migrations/0007_request_rate_limits.sql", "utf8");
   assert.match(source, /CREATE TABLE IF NOT EXISTS request_rate_limits/);

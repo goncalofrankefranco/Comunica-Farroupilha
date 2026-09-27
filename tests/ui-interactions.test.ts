@@ -159,3 +159,10 @@ test("proposal metadata uses one creation timestamp consistently", () => {
   assert.match(shellSource, /Criada \$\{proposal\.createdAt\} · \$\{proposal\.theme\}/);
   assert.match(shellSource, /ELECTIONS_ENABLED &&/);
 });
+
+test("student login offers a verified Google flow to preserve legacy account history", () => {
+  assert.match(shellSource, /Vincular histórico/);
+  assert.match(shellSource, /fetch\("\/api\/auth\/link-legacy"/);
+  assert.match(shellSource, /\/api\/auth\/google\?mode=link/);
+  assert.match(shellSource, /className="legacy-link-form"/);
+});

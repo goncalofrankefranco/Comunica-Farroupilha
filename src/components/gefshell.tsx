@@ -1235,10 +1235,14 @@ function ActivityComposer({ proposals, initialProposalId, onCancel, onCreate }: 
 function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Promise<string | null> }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [legacyUsername, setLegacyUsername] = useState("");
+  const [legacyPassword, setLegacyPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [legacyLinkRequested, setLegacyLinkRequested] = useState(false);
   const authErrorCode = useSyncExternalStore(subscribeToAuthLocation, getAuthErrorSnapshot, getServerAuthErrorSnapshot);
   const displayedError = error || getAuthErrorMessage(authErrorCode);
+  const legacyLinkOpen = legacyLinkRequested || authErrorCode.startsWith("legacy-link-");
 
   function clearError() {
     setError("");
@@ -1257,6 +1261,31 @@ function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Pr
     if (result) setError(result);
   }
 
+  async function submitLegacyLink(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setLegacyLinkRequested(true);
+    clearError();
+    try {
+      const response = await fetch("/api/auth/link-legacy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: legacyUsername, password: legacyPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setBusy(false);
+        setError(result.error || "Não foi possível validar essa conta antiga.");
+        return;
+      }
+      const continueTo = typeof result.data?.continueTo === "string" ? result.data.continueTo : "/api/auth/google?mode=link";
+      window.location.assign(continueTo);
+    } catch {
+      setBusy(false);
+      setError("Não foi possível iniciar o vínculo agora. Tente novamente.");
+    }
+  }
+
   return (
     <main className="auth-page">
       <div className="auth-brand" aria-label="Comunica Farroupilha">
@@ -1269,19 +1298,39 @@ function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Pr
         <form onSubmit={submit}>
           <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
           <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
-          {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
+          {displayedError && !legacyLinkOpen && <p className="form-error" role="alert">{displayedError}</p>}
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
             {busy ? "Aguarde…" : "Entrar na plataforma"}
             <Icon name="arrow" size={16} />
           </button>
         </form>
         <div className="auth-divider"><span>ou</span></div>
+        <button
+          type="button"
+          className="legacy-link-trigger"
+          aria-expanded={legacyLinkOpen}
+          aria-controls="legacy-link-form"
+          onClick={() => { setLegacyLinkRequested(!legacyLinkOpen); clearError(); }}
+        >
+          Já tinha uma conta? Vincular histórico
+        </button>
+        {legacyLinkOpen && (
+          <form id="legacy-link-form" className="legacy-link-form" onSubmit={submitLegacyLink}>
+            <p>Confirme seu usuário e senha antigos. Em seguida, validaremos sua conta escolar do Google para manter suas propostas e apoios.</p>
+            <label>Usuário antigo<input value={legacyUsername} onChange={(event) => setLegacyUsername(event.target.value)} autoComplete="username" required /></label>
+            <label>Senha antiga<input type="password" value={legacyPassword} onChange={(event) => setLegacyPassword(event.target.value)} autoComplete="current-password" required /></label>
+            {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
+            <button type="submit" className="secondary-button" disabled={busy}>
+              {busy ? "Aguarde…" : "Vincular e confirmar com Google"}
+            </button>
+          </form>
+        )}
         <a className="google-login-button" href="/api/auth/google">
           <span aria-hidden="true">G</span>Continuar com Google
         </a>
         <div className="auth-note">
           <Icon name="info" size={16} />
-          <span>Estudantes entram com uma conta Google verificada @farroups.com.br. O acesso do GEF é gerenciado pela equipe responsável.</span>
+          <span>Estudantes entram com uma conta Google verificada @farroups.com.br. Vincule sua conta antiga antes de continuar para preservar seu histórico. O acesso do GEF é gerenciado pela equipe responsável.</span>
         </div>
       </div>
     </main>
