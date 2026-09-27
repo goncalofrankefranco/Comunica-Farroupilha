@@ -1,6 +1,7 @@
 import { findAccountCredentials, normalizeUsername } from "@/lib/auth-repository";
 import { unavailableResponse } from "@/lib/http";
 import { verifyPassword } from "@/lib/password";
+import { canUsePasswordLogin } from "@/lib/password-login-policy";
 import { enforceRequestLimit } from "@/lib/rate-limit";
 import { startSession } from "@/lib/session";
 
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
     if (accountLimit) return accountLimit;
 
     const credentials = await findAccountCredentials(name);
-    if (credentials?.user.role !== "gef" || !credentials.passwordHash || !(await verifyPassword(password, credentials.passwordHash))) {
+    const studentPasswordFallbackEnabled = process.env.STUDENT_PASSWORD_AUTH_ENABLED === "true";
+    if (!credentials || !canUsePasswordLogin(credentials.user.role, studentPasswordFallbackEnabled) || !credentials.passwordHash || !(await verifyPassword(password, credentials.passwordHash))) {
       return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
     }
     await startSession(credentials.user);

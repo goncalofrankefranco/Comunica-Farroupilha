@@ -4,14 +4,15 @@ import { test } from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-test("only verified Google identities can create or use student accounts", () => {
+test("student password login is temporary and gated without reopening signup", () => {
   const signup = read("src/app/api/auth/signup/route.ts");
   const login = read("src/app/api/auth/login/route.ts");
   const shell = read("src/components/gefshell.tsx");
 
   assert.match(signup, /status:\s*410/);
   assert.doesNotMatch(signup, /hashPassword|createAccount|startSession/);
-  assert.match(login, /credentials\?\.user\.role\s*!==\s*["']gef["']/);
+  assert.match(login, /canUsePasswordLogin/);
+  assert.match(login, /STUDENT_PASSWORD_AUTH_ENABLED === "true"/);
   assert.doesNotMatch(shell, /onSignup|Criar conta|Criar minha conta/);
 });
 

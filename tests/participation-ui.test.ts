@@ -87,11 +87,12 @@ test("Google login verifies the allowed institutional identity on the server", (
   assert.match(shell, /Continuar com Google/);
 });
 
-test("student accounts can only be created and authenticated through verified Google identity", () => {
+test("student password fallback is gated and new accounts still require Google", () => {
   const signup = readFileSync("src/app/api/auth/signup/route.ts", "utf8");
   const login = readFileSync("src/app/api/auth/login/route.ts", "utf8");
   assert.match(signup, /status:\s*410/);
-  assert.match(login, /credentials\?\.user\.role\s*!==\s*["']gef["']/);
+  assert.match(login, /canUsePasswordLogin/);
+  assert.match(login, /STUDENT_PASSWORD_AUTH_ENABLED === "true"/);
   assert.doesNotMatch(shell, /Criar conta|Criar minha conta|onSignup/);
-  assert.match(shell, /Google verificada @farroups\.com\.br/);
+  assert.match(shell, /Novos cadastros continuam dependendo da conta escolar verificada/);
 });

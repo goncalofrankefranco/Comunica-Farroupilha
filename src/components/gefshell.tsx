@@ -1330,7 +1330,7 @@ function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Pr
         </a>
         <div className="auth-note">
           <Icon name="info" size={16} />
-          <span>Estudantes entram com uma conta Google verificada @farroups.com.br. Vincule sua conta antiga antes de continuar para preservar seu histórico. O acesso do GEF é gerenciado pela equipe responsável.</span>
+          <span>Enquanto o acesso Google é configurado, estudantes com conta existente podem entrar com usuário e senha. Novos cadastros continuam dependendo da conta escolar verificada. O acesso do GEF é gerenciado pela equipe responsável.</span>
         </div>
       </div>
     </main>
