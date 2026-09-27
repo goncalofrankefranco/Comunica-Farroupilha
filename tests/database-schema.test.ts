@@ -87,7 +87,10 @@ test("rate limit migration stores hashed, expiring shared request budgets", () =
 
 test("database integration tests require a dedicated, guarded database URL", () => {
   const source = readFileSync("tests/test-database.ts", "utf8");
+  const safety = readFileSync("scripts/database-url-safety.mjs", "utf8");
   assert.match(source, /TEST_DATABASE_URL/);
-  assert.match(source, /ALLOW_REMOTE_TEST_DATABASE !== "true"/);
+  assert.match(source, /assertSafeTestDatabaseUrl/);
+  assert.match(safety, /ALLOW_REMOTE_TEST_DATABASE=true/);
+  assert.match(safety, /must be different from the application database/);
   assert.match(source, /process\.env\.DATABASE_URL = databaseUrl/);
 });

@@ -1,6 +1,7 @@
 import { Pool } from "@neondatabase/serverless";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveMigrationDatabaseUrl } from "./database-url-safety.mjs";
 
 try {
   process.loadEnvFile(path.join(process.cwd(), ".env.local"));
@@ -8,8 +9,14 @@ try {
   // CI and Vercel inject environment variables without an env file.
 }
 
-const databaseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL_UNPOOLED ou DATABASE_URL é obrigatória para executar migrações.");
+const databaseUrl = resolveMigrationDatabaseUrl({
+  testMode: process.argv.includes("--test"),
+  testDatabaseUrl: process.env.TEST_DATABASE_URL,
+  applicationDatabaseUrls: [process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED].filter(Boolean),
+  allowRemote: process.env.ALLOW_REMOTE_TEST_DATABASE === "true",
+  databaseUrl: process.env.DATABASE_URL,
+  databaseUrlUnpooled: process.env.DATABASE_URL_UNPOOLED,
+});
 
 const pool = new Pool({ connectionString: databaseUrl });
 const migrationsDir = path.join(process.cwd(), "db", "migrations");

@@ -16,7 +16,7 @@ Variáveis obrigatórias, sempre fora do Git:
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_CLASS`: seed controlado da conta GEF.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`: obrigatórios para autenticação dos estudantes.
 
-Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para um banco isolado. O runner recusa uma URL equivalente a `DATABASE_URL` ou `DATABASE_URL_UNPOOLED`, mesmo com `ALLOW_REMOTE_TEST_DATABASE=true`. Um banco remoto de teste só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; nunca use produção para testes.
+Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para um banco isolado. O runner e `pnpm db:migrate:test` recusam uma URL equivalente a `DATABASE_URL` ou `DATABASE_URL_UNPOOLED`, mesmo com `ALLOW_REMOTE_TEST_DATABASE=true`. `db:migrate:test` usa somente `TEST_DATABASE_URL` e nunca recorre às URLs da aplicação. Um banco remoto de teste só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; nunca use produção para testes.
 
 ## Autenticação
 
@@ -74,6 +74,7 @@ O cliente e o servidor aplicam limites e descartam contas, senhas, sessões e ma
 
 ```sh
 pnpm db:migrate
+pnpm db:migrate:test # requer TEST_DATABASE_URL configurada para um banco isolado
 pnpm db:seed-admin
 pnpm test
 pnpm lint
