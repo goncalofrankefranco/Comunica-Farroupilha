@@ -1,5 +1,6 @@
 import { dataResponse, errorResponse, readJsonObject, requiredString, unavailableResponse } from "@/lib/http";
-import { getProposal, getProposalSupporters, updateProposalGefResponse, updateProposalStatus } from "@/lib/platform-repository";
+import { getProposal, getProposalSupporters, getProposalUserState, updateProposalGefResponse, updateProposalStatus } from "@/lib/platform-repository";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 import type { ProposalStatus } from "@/lib/platform-types";
 import { getSessionUser } from "@/lib/session";
 
@@ -7,13 +8,19 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 const statuses: ProposalStatus[] = ["received", "analysis", "development", "scheduled", "completed", "archived"];
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
+    const limited = await enforceRequestLimit(request, "proposal-detail-read", 60, 60);
+    if (limited) return limited;
     const { id } = await context.params;
     const viewer = await getSessionUser();
     const proposal = await getProposal(id, viewer?.role === "gef");
     if (!proposal) return errorResponse("Proposta não encontrada.", 404);
-    return dataResponse({ ...proposal, supporters: await getProposalSupporters(id, viewer?.role === "gef") });
+    const [supporters, personalState] = await Promise.all([
+      getProposalSupporters(id, viewer?.role === "gef", viewer?.id),
+      viewer ? getProposalUserState(id, viewer.id) : Promise.resolve({ supported: false, saved: false }),
+    ]);
+    return dataResponse({ ...proposal, supporters, ...personalState });
   } catch (error) {
     return unavailableResponse("get-proposal", error);
   }

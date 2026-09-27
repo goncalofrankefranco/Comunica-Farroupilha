@@ -10,12 +10,15 @@ import {
   beginInteraction,
   isLatestInteraction,
   loadPlatform,
+  mergeById,
+  mergePlatformPage,
   parseUiPreferences,
   serializeUiPreferences,
   type LoadStatus,
 } from "@/lib/client-platform-state";
 import { previewLegacyState, sanitizeLegacyImport } from "@/lib/legacy-import";
 import { ELECTIONS_ENABLED } from "@/lib/feature-flags";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 import {
   canCancelProposal,
   filterNotifications,
@@ -67,13 +70,6 @@ function getServerAuthErrorSnapshot() {
   return "";
 }
 
-const AUTH_ERRORS: Record<string, string> = {
-  "google-unavailable": "O acesso com Google ainda não está configurado.",
-  "google-expired": "A tentativa de acesso expirou. Tente novamente.",
-  "google-domain": "Use uma conta escolar verificada @farroups.com.br.",
-  "google-failed": "Não foi possível entrar com o Google.",
-};
-
 type Proposal = {
   id: string;
   title: string;
@@ -87,7 +83,7 @@ type Proposal = {
   comments: number;
   createdAt: string;
   updatedAt: string;
-  origin?: "student" | "gef";
+  origin: "student" | "gef";
   gefResponse?: string;
   gefResponseAt?: string;
 };
@@ -102,7 +98,7 @@ type ProposalComment = {
   body: string;
   createdAt: string;
   parentId?: string;
-  likes?: number;
+  likes: number;
 };
 
 type Supporter = {
@@ -161,6 +157,7 @@ type ChapaQuestion = {
   author: string;
   authorId: string;
   turma: string;
+  answered: boolean;
   answer?: string;
   answeredBy?: string;
   answeredAt?: string;
@@ -173,6 +170,7 @@ type DemoState = {
   comments: ProposalComment[];
   activities: Activity[];
   notifications: Notification[];
+  commentCursorsByProposal: Record<string, string | null>;
   supportedByUser: Record<string, string[]>;
   savedByUser: Record<string, string[]>;
   likedCommentsByUser: Record<string, string[]>;
@@ -193,6 +191,10 @@ const STATUS: Record<ProposalStatus, { label: string; color: string; step: numbe
   archived: { label: "Arquivada", color: "#526475", step: 1 },
   cancelled: { label: "Cancelada", color: "#b24222", step: 0 },
 };
+
+function displayCount(value: number) {
+  return value > 1000 ? "1.000+" : String(value);
+}
 
 const ICON_PATHS: Record<string, string[]> = {
   message: ["M4 5.5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4.5 3v-3H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z", "M7 11.5h.01M12 11.5h.01M17 11.5h.01"],
@@ -287,6 +289,7 @@ const defaultState: DemoState = {
   comments: [],
   activities: [],
   notifications: [],
+  commentCursorsByProposal: {},
   supportedByUser: {},
   savedByUser: {},
   likedCommentsByUser: {},
@@ -531,9 +534,9 @@ function ProposalCard({
               <small>{proposal.anonymous ? `Autoria preservada · Criada ${proposal.createdAt}` : `Criada ${proposal.createdAt} · ${proposal.theme}`}</small>
             </span>
           </span>
-          <span className="support-count"><Icon name="users" size={19} /><span><strong>{proposal.supports}</strong><small>Apoios</small></span></span>
-          <button type="button" className="comment-count tactile-control" aria-label={`Abrir comentários da proposta (${proposal.comments})`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
-            <Icon name="message" size={18} /> {proposal.comments}
+          <span className="support-count"><Icon name="users" size={19} /><span><strong>{displayCount(proposal.supports)}</strong><small>Apoios</small></span></span>
+          <button type="button" className="comment-count tactile-control" aria-label={`Abrir comentários da proposta (${displayCount(proposal.comments)})`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
+            <Icon name="message" size={18} /> {displayCount(proposal.comments)}
           </button>
           {proposal.status !== "cancelled" && <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={(event) => { event.stopPropagation(); run("support", onSupport); }}>
             <Icon name="thumbs" size={18} />{supported ? "Apoiado" : "Apoiar"}
@@ -565,17 +568,25 @@ function ProposalCard({
 function CommentThread({
   comments,
   proposalId,
+  commentCount,
   closed,
   onComment,
   onLike,
   likedCommentIds,
+  hasOlderComments,
+  loadingOlderComments,
+  onLoadOlderComments,
 }: {
   comments: ProposalComment[];
   proposalId: string;
+  commentCount: number;
   closed: boolean;
   onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
+  hasOlderComments: boolean;
+  loadingOlderComments: boolean;
+  onLoadOlderComments: () => void;
 }) {
   const [body, setBody] = useState("");
   const roots = comments.filter((comment) => comment.proposalId === proposalId && !comment.parentId);
@@ -593,7 +604,7 @@ function CommentThread({
       <div className="comments-heading">
         <span className="comments-heading-mark"><Icon name="message" size={16} /></span>
         <div className="comments-heading-copy">
-          <h3 id="comments-title">Comentários ({comments.filter((comment) => comment.proposalId === proposalId).length})</h3>
+          <h3 id="comments-title">Comentários ({commentCount})</h3>
           <span>Conversa aberta para a comunidade</span>
         </div>
       </div>
@@ -627,7 +638,7 @@ function CommentThread({
                 </div>
               </div>
             </div>
-            {comments.filter((reply) => reply.parentId === comment.id).map((reply) => (
+            {comments.filter((reply) => reply.parentId === comment.id && reply.proposalId === proposalId).map((reply) => (
               <div className="comment comment-reply" key={reply.id}>
                 <div className="comment-content">
                   <div className="comment-byline">
@@ -650,6 +661,10 @@ function CommentThread({
           </div>
         )}
       </div>
+      {hasOlderComments && <button type="button" className="secondary-button comment-load-older" onClick={onLoadOlderComments} disabled={loadingOlderComments}>
+        {loadingOlderComments ? "Carregando…" : "Carregar comentários anteriores"}
+        <Icon name="arrow" size={14} />
+      </button>}
       {closed ? <p className="comments-closed" role="status">Esta proposta foi cancelada. Os comentários anteriores permanecem disponíveis.</p> : (
         <form className="comment-composer" onSubmit={submit}>
           <div className="composer-input">
@@ -670,6 +685,9 @@ function ProposalDetail({
   onComment,
   onLike,
   likedCommentIds,
+  hasOlderComments,
+  loadingOlderComments,
+  onLoadOlderComments,
   isGef,
   onSubmitGefResponse,
 }: {
@@ -679,6 +697,9 @@ function ProposalDetail({
   onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
+  hasOlderComments: boolean;
+  loadingOlderComments: boolean;
+  onLoadOlderComments: () => void;
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
 }) {
   const [editingGefResponse, setEditingGefResponse] = useState(false);
@@ -695,7 +716,7 @@ function ProposalDetail({
 
   return (
     <div className="detail-grid" id={`proposal-detail-${proposal.id}`}>
-      <CommentThread comments={comments} proposalId={proposal.id} closed={proposal.status === "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} />
+      <CommentThread comments={comments} proposalId={proposal.id} commentCount={proposal.comments} closed={proposal.status === "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} hasOlderComments={hasOlderComments} loadingOlderComments={loadingOlderComments} onLoadOlderComments={onLoadOlderComments} />
       {isGef && proposal.status !== "cancelled" && onSubmitGefResponse && (
         <div className="detail-side">
           <div className="gef-response-tools" aria-label="Resposta oficial do GEF">
@@ -738,6 +759,9 @@ function ProposalPreview({
   onComment,
   onLike,
   likedCommentIds,
+  hasOlderComments,
+  loadingOlderComments,
+  onLoadOlderComments,
   onSubmitGefResponse,
   onClose,
 }: {
@@ -752,6 +776,9 @@ function ProposalPreview({
   onComment: (body: string, parentId?: string) => void;
   onLike: (commentId: string) => void;
   likedCommentIds: string[];
+  hasOlderComments: boolean;
+  loadingOlderComments: boolean;
+  onLoadOlderComments: () => void;
   onSubmitGefResponse?: (id: string, response: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -771,8 +798,8 @@ function ProposalPreview({
         <StatusBadge status={proposal.status} />
         {proposal.origin === "gef" && <span className="gef-origin-tag"><Icon name="spark" size={13} /> Consulta do GEF</span>}
         <span>{proposal.theme}</span>
-        <span>{proposal.supports} apoios</span>
-        <span>{proposal.comments} comentários</span>
+        <span>{displayCount(proposal.supports)} apoios</span>
+        <span>{displayCount(proposal.comments)} comentários</span>
         {proposal.status !== "cancelled" && <button type="button" className={`support-button tactile-control ${supported ? "is-supported" : ""} ${committingAction === "support" ? "is-committing" : ""}`} aria-pressed={supported} onClick={() => run("support", onSupport)}>
           <Icon name="thumbs" size={17} />{supported ? "Apoiado" : "Apoiar"}
         </button>}
@@ -780,7 +807,7 @@ function ProposalPreview({
           <Icon name="bookmark" size={17} />
         </button>}
       </div>
-      <ProposalDetail proposal={proposal} comments={comments} isGef={isGef && proposal.status !== "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} onSubmitGefResponse={onSubmitGefResponse} />
+      <ProposalDetail proposal={proposal} comments={comments} isGef={isGef && proposal.status !== "cancelled"} onComment={onComment} onLike={onLike} likedCommentIds={likedCommentIds} hasOlderComments={hasOlderComments} loadingOlderComments={loadingOlderComments} onLoadOlderComments={onLoadOlderComments} onSubmitGefResponse={onSubmitGefResponse} />
       {isGef && proposal.status !== "cancelled" && (
         <div className="context-proposal-actions">
           <span><Icon name="spark" size={15} /> Ações do GEF</span>
@@ -1178,41 +1205,40 @@ function ActivityComposer({ proposals, initialProposalId, onCancel, onCreate }: 
         </div>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="Fechar agenda"><Icon name="close" size={20} /></button>
       </div>
-      <div className="form-field">
-        <span className="form-field-label">Proposta de origem</span>
-        <SelectMenu
-          value={proposalId}
-          onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
-          options={list.map((p) => ({ value: p.id, label: p.title }))}
-          ariaLabel="Proposta de origem da atividade"
-          className="select-menu-field"
-        />
-      </div>
-      <label>Título da atividade<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-      <div className="form-row">
-        <label>Data<input type="date" min={minDate} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-        <label>Horário<input value={time} onChange={(event) => setTime(event.target.value)} /></label>
-      </div>
-      <label>Local<input value={place} onChange={(event) => setPlace(event.target.value)} /></label>
-      {list.length === 0 && <p className="form-error">Só é possível agendar propostas em análise ou em desenvolvimento.</p>}
-      <div className="composer-help"><Icon name="bell" size={16} /> Todas as turmas receberão o aviso dentro da plataforma.</div>
+      {list.length > 0 ? <>
+        <div className="form-field">
+          <span className="form-field-label">Proposta de origem</span>
+          <SelectMenu
+            value={proposalId}
+            onChange={(value) => { setProposalId(value); const p = list.find((item) => item.id === value); if (p) setTitle(p.title); }}
+            options={list.map((p) => ({ value: p.id, label: p.title }))}
+            ariaLabel="Proposta de origem da atividade"
+            className="select-menu-field"
+          />
+        </div>
+        <label>Título da atividade<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+        <div className="form-row">
+          <label>Data<input type="date" min={minDate} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+          <label>Horário<input value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        </div>
+        <label>Local<input value={place} onChange={(event) => setPlace(event.target.value)} /></label>
+        <div className="composer-help"><Icon name="bell" size={16} /> Todas as turmas receberão o aviso dentro da plataforma.</div>
+      </> : <p className="activity-no-proposals" role="status">Só é possível agendar propostas em análise ou em desenvolvimento.</p>}
       <div className="composer-actions">
         <button type="button" className="secondary-button" onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="primary-button" disabled={!proposalId || !title.trim() || !isValidDateKey(date) || date < minDate || !place.trim()}>Publicar na agenda <Icon name="arrow" size={16} /></button>
+        <button type="submit" className="primary-button" disabled={!list.length || !proposalId || !title.trim() || !isValidDateKey(date) || date < minDate || !place.trim()}>Publicar na agenda <Icon name="arrow" size={16} /></button>
       </div>
     </form>
   );
 }
 
-function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: string) => Promise<string | null>; onSignup: (name: string, turma: string, password: string) => Promise<string | null> }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Promise<string | null> }) {
   const [name, setName] = useState("");
-  const [turma, setTurma] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const authErrorCode = useSyncExternalStore(subscribeToAuthLocation, getAuthErrorSnapshot, getServerAuthErrorSnapshot);
-  const displayedError = error || AUTH_ERRORS[authErrorCode] || "";
+  const displayedError = error || getAuthErrorMessage(authErrorCode);
 
   function clearError() {
     setError("");
@@ -1226,7 +1252,7 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
     event.preventDefault();
     setBusy(true);
     clearError();
-    const result = mode === "login" ? await onLogin(name.trim(), password) : await onSignup(name.trim(), turma, password);
+    const result = await onLogin(name.trim(), password);
     setBusy(false);
     if (result) setError(result);
   }
@@ -1238,31 +1264,24 @@ function AuthView({ onLogin, onSignup }: { onLogin: (name: string, password: str
       </div>
       <div className="auth-card">
         <span className="eyebrow">COMUNICA FARROUPILHA</span>
-        <h1>{mode === "login" ? "Que bom ter você por aqui." : "Faça parte da conversa."}</h1>
-        <p>{mode === "login" ? "Entre para acompanhar as propostas e ajudar a construir o próximo recreio." : "Crie uma conta para propor, apoiar e avaliar atividades."}</p>
-        <div className="auth-tabs">
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); clearError(); }}>Entrar</button>
-          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); clearError(); }}>Criar conta</button>
-        </div>
+        <h1>Que bom ter você por aqui.</h1>
+        <p>Entre para acompanhar as propostas e ajudar a construir o próximo recreio.</p>
         <form onSubmit={submit}>
           <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
-          {mode === "signup" && <label>Turma<input value={turma} onChange={(event) => setTurma(event.target.value)} placeholder="Ex.: 8º ano A ou 2º EM" autoComplete="organization" required /></label>}
-          <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} required /></label>
+          <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
           {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
-            {busy ? "Aguarde…" : mode === "login" ? "Entrar na plataforma" : "Criar minha conta"}
+            {busy ? "Aguarde…" : "Entrar na plataforma"}
             <Icon name="arrow" size={16} />
           </button>
         </form>
-        {mode === "login" && <>
-          <div className="auth-divider"><span>ou</span></div>
-          <a className="google-login-button" href="/api/auth/google">
-            <span aria-hidden="true">G</span>Continuar com Google
-          </a>
-        </>}
+        <div className="auth-divider"><span>ou</span></div>
+        <a className="google-login-button" href="/api/auth/google">
+          <span aria-hidden="true">G</span>Continuar com Google
+        </a>
         <div className="auth-note">
           <Icon name="info" size={16} />
-          <span>Estudantes podem criar uma conta. O acesso administrativo do GEF é gerenciado com credenciais seguras pela equipe responsável.</span>
+          <span>Estudantes entram com uma conta Google verificada @farroups.com.br. O acesso do GEF é gerenciado pela equipe responsável.</span>
         </div>
       </div>
     </main>
@@ -1324,6 +1343,9 @@ export function GEFShell() {
   const loadController = useRef<AbortController | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [loadError, setLoadError] = useState("");
+  const [nextProposalCursor, setNextProposalCursor] = useState<string | null>(null);
+  const [loadingOlderProposals, setLoadingOlderProposals] = useState(false);
+  const [loadingCommentPages, setLoadingCommentPages] = useState<Record<string, boolean>>({});
   const [interactionError, setInteractionError] = useState("");
   const [legacyState, setLegacyState] = useState(getLegacyBrowserState);
   const [legacyImportStatus, setLegacyImportStatus] = useState<"idle" | "importing" | "success">("idle");
@@ -1346,6 +1368,7 @@ export function GEFShell() {
         comments: snapshot.comments,
         activities: snapshot.activities,
         notifications: snapshot.notifications,
+        commentCursorsByProposal: snapshot.commentCursorsByProposal,
         supportedByUser: snapshot.supportedByUser,
         savedByUser: snapshot.savedByUser,
         likedCommentsByUser: snapshot.likedCommentsByUser,
@@ -1353,6 +1376,7 @@ export function GEFShell() {
         activityFeedbacks: snapshot.activityFeedbacks,
         chapaQuestions: snapshot.chapaQuestions,
       });
+      setNextProposalCursor(snapshot.nextProposalCursor);
       setLoadStatus("ready");
     } catch (error) {
       if (controller.signal.aborted || revision !== loadRevision.current) return;
@@ -1360,6 +1384,86 @@ export function GEFShell() {
       setLoadStatus("error");
     }
   }, []);
+
+  async function loadOlderProposals() {
+    const cursor = nextProposalCursor;
+    if (!cursor || loadingOlderProposals) return;
+    setLoadingOlderProposals(true);
+    try {
+      const { snapshot } = await loadPlatform(new AbortController().signal, fetch, cursor);
+      setState((current) => {
+        if (!current.user) return current;
+        const currentPage = {
+          proposals: current.proposals,
+          comments: current.comments,
+          activities: current.activities,
+          notifications: current.notifications,
+          commentCursorsByProposal: current.commentCursorsByProposal,
+          supportedByUser: current.supportedByUser,
+          savedByUser: current.savedByUser,
+          likedCommentsByUser: current.likedCommentsByUser,
+          supportersByProposal: current.supporters,
+          chapas: [],
+          activityFeedbacks: current.activityFeedbacks,
+          chapaQuestions: current.chapaQuestions,
+          nextProposalCursor: cursor,
+        };
+        const merged = mergePlatformPage(currentPage, snapshot, current.user.id);
+        return {
+          ...current,
+          proposals: merged.proposals,
+          comments: merged.comments,
+          activities: merged.activities,
+          notifications: merged.notifications,
+          commentCursorsByProposal: merged.commentCursorsByProposal,
+          supportedByUser: merged.supportedByUser,
+          savedByUser: merged.savedByUser,
+          likedCommentsByUser: merged.likedCommentsByUser,
+          supporters: merged.supportersByProposal,
+          activityFeedbacks: merged.activityFeedbacks,
+          chapaQuestions: merged.chapaQuestions,
+        };
+      });
+      setNextProposalCursor(snapshot.nextProposalCursor);
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Não foi possível carregar propostas anteriores.");
+    } finally {
+      setLoadingOlderProposals(false);
+    }
+  }
+
+  async function loadOlderComments(proposalId: string) {
+    const cursor = state.commentCursorsByProposal[proposalId];
+    if (!cursor || loadingCommentPages[proposalId]) return;
+    setLoadingCommentPages((current) => ({ ...current, [proposalId]: true }));
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/comments?cursor=${encodeURIComponent(cursor)}`, { cache: "no-store" });
+      const body = await response.json();
+      const page = body?.data;
+      if (!response.ok || !page || !Array.isArray(page.comments)) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Não foi possível carregar comentários anteriores.");
+      }
+      const likedIds = Array.isArray(page.likedCommentIds) ? page.likedCommentIds.filter((id: unknown): id is string => typeof id === "string") : [];
+      setState((current) => {
+        const userId = current.user?.id;
+        return {
+          ...current,
+          comments: mergeById(page.comments as ProposalComment[], current.comments),
+          ...(userId ? {
+            likedCommentsByUser: {
+              ...current.likedCommentsByUser,
+              [userId]: Array.from(new Set([...(current.likedCommentsByUser[userId] ?? []), ...likedIds])),
+            },
+          } : {}),
+          commentCursorsByProposal: { ...current.commentCursorsByProposal, [proposalId]: page.nextCursor ?? null },
+        };
+      });
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Não foi possível carregar comentários anteriores.");
+    } finally {
+      setLoadingCommentPages((current) => ({ ...current, [proposalId]: false }));
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refreshPlatform(), 0);
@@ -1454,6 +1558,14 @@ export function GEFShell() {
   }, [user, state.likedCommentsByUser]);
 
   const selected = state.proposals.find((proposal) => proposal.id === selectedId) ?? filteredProposals[0] ?? state.proposals[0];
+  const olderProposalsButton = nextProposalCursor ? (
+    <div className="load-older-wrap">
+      <button type="button" className="secondary-button" onClick={() => void loadOlderProposals()} disabled={loadingOlderProposals}>
+        {loadingOlderProposals ? "Carregando…" : "Carregar propostas anteriores"}
+        <Icon name="arrow" size={15} />
+      </button>
+    </div>
+  ) : null;
   const savedProposals = useMemo(() => {
     if (!user) return [];
     return state.proposals.filter((proposal) => userSavedIds.includes(proposal.id));
@@ -1488,26 +1600,6 @@ export function GEFShell() {
     }
   }
 
-  async function signup(name: string, turma: string, password: string): Promise<string | null> {
-    const trimmedName = name.trim();
-    const trimmedTurma = turma.trim() || "Turma não informada";
-
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: trimmedName, turma: trimmedTurma, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) return data.error || "Não foi possível criar a conta.";
-      await refreshPlatform();
-      setView("proposals");
-      return null;
-    } catch {
-      return "Erro ao conectar com o servidor.";
-    }
-  }
-
   async function logout() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -1523,10 +1615,55 @@ export function GEFShell() {
     setActivityOpen(false);
   }
 
-  function openProposal(id: string) {
+  async function openProposal(id: string) {
     exploreProposals();
-    setSelectedId(id);
-    setPendingProposalScrollId(id);
+    if (state.proposals.some((proposal) => proposal.id === id)) {
+      setSelectedId(id);
+      setPendingProposalScrollId(id);
+      return;
+    }
+
+    try {
+      const [proposalResponse, commentsResponse] = await Promise.all([
+        fetch(`/api/proposals/${id}`, { cache: "no-store" }),
+        fetch(`/api/proposals/${id}/comments`, { cache: "no-store" }),
+      ]);
+      const [proposalBody, commentsBody] = await Promise.all([proposalResponse.json(), commentsResponse.json()]);
+      const proposal = proposalBody?.data as (Proposal & { supporters?: Supporter[]; supported?: boolean; saved?: boolean }) | undefined;
+      const commentsPage = commentsBody?.data;
+      if (!proposalResponse.ok || !proposal?.id || !commentsResponse.ok || !Array.isArray(commentsPage?.comments)) {
+        throw new Error("Não foi possível abrir esta proposta.");
+      }
+      const commentLikes = Array.isArray(commentsPage.likedCommentIds)
+        ? commentsPage.likedCommentIds.filter((commentId: unknown): commentId is string => typeof commentId === "string")
+        : [];
+      setState((current) => {
+        const userId = current.user?.id;
+        const updateIds = (ids: string[], enabled: boolean) => {
+          const withoutProposal = ids.filter((savedId) => savedId !== id);
+          return enabled ? [...withoutProposal, id] : withoutProposal;
+        };
+        return {
+          ...current,
+          proposals: mergeById([proposal], current.proposals),
+          comments: mergeById(commentsPage.comments as ProposalComment[], current.comments),
+          supporters: { ...current.supporters, [id]: proposal.supporters ?? [] },
+          ...(userId ? {
+            supportedByUser: { ...current.supportedByUser, [userId]: updateIds(current.supportedByUser[userId] ?? [], proposal.supported === true) },
+            savedByUser: { ...current.savedByUser, [userId]: updateIds(current.savedByUser[userId] ?? [], proposal.saved === true) },
+            likedCommentsByUser: {
+              ...current.likedCommentsByUser,
+              [userId]: Array.from(new Set([...(current.likedCommentsByUser[userId] ?? []), ...commentLikes])),
+            },
+          } : {}),
+          commentCursorsByProposal: { ...current.commentCursorsByProposal, [id]: commentsPage.nextCursor ?? null },
+        };
+      });
+      setSelectedId(id);
+      setPendingProposalScrollId(id);
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Não foi possível abrir esta proposta.");
+    }
   }
 
   function openComposer() {
@@ -1851,7 +1988,7 @@ export function GEFShell() {
     }
   }
 
-  function openNotification(notification: Notification) {
+  async function openNotification(notification: Notification) {
     const wasRead = notification.read;
     if (!wasRead) setState((curr) => ({ ...curr, notifications: curr.notifications.map((item) => item.id === notification.id ? { ...item, read: true } : item) }));
     if (!wasRead) {
@@ -1870,7 +2007,18 @@ export function GEFShell() {
     const destination = getNotificationDestination(notification);
     if (!destination) return;
     if (destination.view === "agenda") {
-      const activity = state.activities.find((item) => item.id === destination.activityId);
+      let activity = state.activities.find((item) => item.id === destination.activityId);
+      if (!activity && destination.activityId) {
+        try {
+          const response = await fetch(`/api/activities/${destination.activityId}`, { cache: "no-store" });
+          const body = await response.json();
+          if (!response.ok || !body?.data?.id) throw new Error("Não foi possível abrir esta atividade.");
+          activity = body.data as Activity;
+          setState((current) => ({ ...current, activities: mergeById([activity!], current.activities) }));
+        } catch (error) {
+          setInteractionError(error instanceof Error ? error.message : "Não foi possível abrir esta atividade.");
+        }
+      }
       if (activity) {
         setAgendaMonthOverride(activity.date.slice(0, 7));
         setPendingActivityScrollId(activity.id);
@@ -1878,7 +2026,7 @@ export function GEFShell() {
       changeView("agenda");
       return;
     }
-    openProposal(destination.proposalId);
+    if (destination.proposalId) await openProposal(destination.proposalId);
   }
 
   async function importLegacyData() {
@@ -1939,7 +2087,7 @@ export function GEFShell() {
   }
 
   if (!user) {
-    return <AuthView onLogin={login} onSignup={signup} />;
+    return <AuthView onLogin={login} />;
   }
 
   return (
@@ -2089,6 +2237,9 @@ export function GEFShell() {
                         onComment={addComment}
                         onLike={toggleCommentLike}
                         likedCommentIds={userLikedCommentIds}
+                        hasOlderComments={Boolean(state.commentCursorsByProposal[proposal.id])}
+                        loadingOlderComments={Boolean(loadingCommentPages[proposal.id])}
+                        onLoadOlderComments={() => void loadOlderComments(proposal.id)}
                         onSubmitGefResponse={submitGefResponse}
                       />
                     )}
@@ -2102,6 +2253,7 @@ export function GEFShell() {
                   </div>
                 )}
               </div>
+              {olderProposalsButton}
             </>
           )}
 
@@ -2148,6 +2300,9 @@ export function GEFShell() {
                           onComment={addComment}
                           onLike={toggleCommentLike}
                           likedCommentIds={userLikedCommentIds}
+                          hasOlderComments={Boolean(state.commentCursorsByProposal[proposal.id])}
+                          loadingOlderComments={Boolean(loadingCommentPages[proposal.id])}
+                          onLoadOlderComments={() => void loadOlderComments(proposal.id)}
                           onSubmitGefResponse={submitGefResponse}
                         />
                       )}
@@ -2155,6 +2310,7 @@ export function GEFShell() {
                   ))}
                 </div>
               )}
+              {olderProposalsButton}
             </section>
           )}
 
@@ -2278,6 +2434,9 @@ export function GEFShell() {
                     onComment={(body, parentId) => addComment(body, parentId, agendaProposal.id)}
                     onLike={toggleCommentLike}
                     likedCommentIds={userLikedCommentIds}
+                    hasOlderComments={Boolean(state.commentCursorsByProposal[agendaProposal.id])}
+                    loadingOlderComments={Boolean(loadingCommentPages[agendaProposal.id])}
+                    onLoadOlderComments={() => void loadOlderComments(agendaProposal.id)}
                     onSubmitGefResponse={submitGefResponse}
                     onClose={() => setAgendaProposalId(null)}
                   />
@@ -2346,7 +2505,7 @@ export function GEFShell() {
                   return <button
                     className={`notification-item type-${notification.type} ${notification.read ? "is-read" : ""}`}
                     key={notification.id}
-                    onClick={() => openNotification(notification)}
+                    onClick={() => void openNotification(notification)}
                     aria-label={`${notification.read ? "" : "Não lida. "}${notification.title}. ${destination ? "Abrir destino" : "Marcar como lida"}`}
                   >
                     <span className={`notification-icon ${notification.type}`}><Icon name={icon[notification.type]} size={19} /></span>
@@ -2424,7 +2583,7 @@ export function GEFShell() {
                       return <article className="gef-task-row" key={proposal.id}>
                         <div className="gef-task-copy">
                           <strong>{proposal.title}</strong>
-                          <small>{proposal.theme} · {proposal.comments} comentários · {proposal.supports} apoios</small>
+                          <small>{proposal.theme} · {displayCount(proposal.comments)} comentários · {displayCount(proposal.supports)} apoios</small>
                         </div>
                         <StatusBadge status={proposal.status} />
                         <div className="gef-task-actions">
@@ -2458,6 +2617,7 @@ export function GEFShell() {
                   </div>}
                 </aside>
               </div>
+              {olderProposalsButton}
 
               <details className="gef-map-details">
                 <summary>Explorar mapa temático</summary>
@@ -2500,6 +2660,9 @@ export function GEFShell() {
                     onComment={(body, parentId) => addComment(body, parentId, gefProposal.id)}
                     onLike={toggleCommentLike}
                     likedCommentIds={userLikedCommentIds}
+                    hasOlderComments={Boolean(state.commentCursorsByProposal[gefProposal.id])}
+                    loadingOlderComments={Boolean(loadingCommentPages[gefProposal.id])}
+                    onLoadOlderComments={() => void loadOlderComments(gefProposal.id)}
                     onSubmitGefResponse={submitGefResponse}
                     onClose={() => setGefProposalId(null)}
                   />

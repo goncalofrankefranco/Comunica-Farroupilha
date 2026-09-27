@@ -1,27 +1,34 @@
 import { dataResponse, errorResponse, readJsonObject, requiredString, unavailableResponse } from "@/lib/http";
-import { getActivity, getActivityFeedbacks, getPlatformSnapshot, submitActivityFeedback } from "@/lib/platform-repository";
+import { getActivity, getActivityFeedbacks, submitActivityFeedback } from "@/lib/platform-repository";
 import type { ActivityFeedbackRating } from "@/lib/platform-types";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 import { getSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 const ratings: ActivityFeedbackRating[] = ["great", "good", "ok", "poor"];
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
+    const ipLimit = await enforceRequestLimit(request, "feedback-read", 60, 60);
+    if (ipLimit) return ipLimit;
     const user = await getSessionUser();
     if (!user) return errorResponse("Faça login para consultar avaliações.", 401);
     const { id } = await context.params;
     if (!(await getActivity(id))) return errorResponse("Atividade não encontrada.", 404);
-    if (user.role === "gef") return dataResponse(await getActivityFeedbacks(id));
-    return dataResponse((await getPlatformSnapshot(user.id)).activityFeedbacks[id] ?? []);
+    return dataResponse(await getActivityFeedbacks(id, user.role === "gef" ? undefined : user.id));
   } catch (error) { return unavailableResponse("list-feedback", error); }
 }
 
 export async function POST(request: Request, context: RouteContext) {
   try {
+    const ipLimit = await enforceRequestLimit(request, "feedback-write-ip", 5000, 3600);
+    if (ipLimit) return ipLimit;
     const user = await getSessionUser();
     if (!user) return errorResponse("Faça login para avaliar uma atividade.", 401);
+    const { id } = await context.params;
+    const userLimit = await enforceRequestLimit(request, `feedback-write:${id}`, 10, 3600, user.id);
+    if (userLimit) return userLimit;
     const body = await readJsonObject(request);
     if (!body) return errorResponse("Envie um JSON válido.", 400);
     if (typeof body.participated !== "boolean") return errorResponse("Informe se você participou da atividade.", 400);
@@ -29,7 +36,6 @@ export async function POST(request: Request, context: RouteContext) {
     const comment = body.comment === undefined ? undefined : requiredString(body.comment, { max: 2000 });
     const rating = typeof body.rating === "string" && ratings.includes(body.rating as ActivityFeedbackRating) ? body.rating as ActivityFeedbackRating : undefined;
     if ((body.reasonNotParticipated !== undefined && !reason) || (body.comment !== undefined && !comment) || (body.rating !== undefined && !rating)) return errorResponse("Avaliação inválida.", 400);
-    const { id } = await context.params;
     if (!(await getActivity(id))) return errorResponse("Atividade não encontrada.", 404);
     return dataResponse(await submitActivityFeedback(id, {
       userId: user.id, participated: body.participated,

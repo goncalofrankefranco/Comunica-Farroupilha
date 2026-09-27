@@ -48,10 +48,13 @@ test("platform and health routes expose dynamic database state without caching",
   const health = readFileSync("src/app/api/health/route.ts", "utf8");
   const http = readFileSync("src/lib/http.ts", "utf8");
 
-  assert.match(platform, /await getPlatformSnapshot\(user\?\.id\)/);
+  assert.match(platform, /await getPlatformSnapshot\(user\?\.id, cursor\)/);
   assert.match(health, /await checkDatabaseConnection\(\)/);
   assert.match(http, /["']Cache-Control["']\s*:\s*["']no-store, max-age=0/);
   assert.match(http, /Vary\s*:\s*["']Cookie/);
+  const proposals = readFileSync("src/app/api/proposals/route.ts", "utf8");
+  assert.match(proposals, /parseTimestampCursor/);
+  assert.match(proposals, /X-Next-Cursor/);
 });
 
 test("session lookup responses are private and never cached", () => {

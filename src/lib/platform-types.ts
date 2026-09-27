@@ -105,6 +105,7 @@ export type PlatformSnapshot = {
   comments: CommentRecord[];
   activities: ActivityRecord[];
   notifications: NotificationRecord[];
+  commentCursorsByProposal: Record<string, string | null>;
   supportedByUser: Record<string, string[]>;
   savedByUser: Record<string, string[]>;
   likedCommentsByUser: Record<string, string[]>;
@@ -112,6 +113,7 @@ export type PlatformSnapshot = {
   chapas: ChapaRecord[];
   activityFeedbacks: Record<string, ActivityFeedbackRecord[]>;
   chapaQuestions: ChapaQuestionRecord[];
+  nextProposalCursor: string | null;
 };
 
 export const CHAPA_AREAS = ["Esportes e movimento", "Cultura e música", "Convivência e descanso", "Participação"] as const;

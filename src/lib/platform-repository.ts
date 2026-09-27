@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { QueryResultRow } from "@neondatabase/serverless";
 import { query, transaction, type TransactionQuery } from "./db.ts";
 import { collapseNotifications, createNotification, notificationKey, type NotificationRow } from "./notification-manager.ts";
+import { ELECTIONS_ENABLED } from "./feature-flags.ts";
 import {
   CHAPAS,
   type ActivityFeedbackRating,
@@ -24,12 +25,13 @@ import type { LegacyImportPayload } from "./legacy-import.ts";
 type ProposalRow = QueryResultRow & {
   id: string; title: string; body: string; author_id: string | null; author_name: string; anonymous: boolean;
   theme: string; status: ProposalStatus; origin: "student" | "gef"; gef_response: string | null;
-  gef_response_at: Date | string | null; created_at: Date | string; updated_at: Date | string;
+  gef_response_at: Date | string | null; created_at: Date | string; updated_at: Date | string; cursor_created_at: string;
   supports: number | string; comments: number | string;
 };
 type CommentRow = QueryResultRow & {
   id: string; proposal_id: string; author_id: string | null; author_name: string; author_role: UserRole;
-  anonymous: boolean; body: string; parent_id: string | null; created_at: Date | string; likes: number | string;
+  anonymous: boolean; body: string; parent_id: string | null; created_at: Date | string; cursor_created_at?: string;
+  likes: number | string; liked_by_viewer?: boolean;
 };
 type ActivityRow = QueryResultRow & {
   id: string; proposal_id: string; title: string; activity_date: Date | string; time_label: string;
@@ -48,9 +50,18 @@ type ChapaQuestionRow = QueryResultRow & {
 const proposalSelect = `
   SELECT p.id, p.title, p.body, p.author_id, p.author_name, p.anonymous, p.theme, p.status, p.origin,
          p.gef_response, p.gef_response_at, p.created_at, p.updated_at,
-         (SELECT count(*)::int FROM proposal_supports ps WHERE ps.proposal_id = p.id) AS supports,
-         (SELECT count(*)::int FROM comments c WHERE c.proposal_id = p.id) AS comments
+         to_char(p.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at,
+         (SELECT count(*)::int FROM (SELECT 1 FROM proposal_supports ps WHERE ps.proposal_id = p.id LIMIT 1001) bounded_supports) AS supports,
+         (SELECT count(*)::int FROM (SELECT 1 FROM comments c WHERE c.proposal_id = p.id LIMIT 1001) bounded_comments) AS comments
   FROM proposals p`;
+
+const PROPOSAL_PAGE_SIZE = 50;
+const SNAPSHOT_COMMENTS_PER_PROPOSAL = 20;
+type SnapshotCursor = { createdAt: string; id: string };
+
+function timestampCursor(createdAt: string, id: string): string {
+  return `${createdAt}~${id}`;
+}
 
 function timeLabel(value: Date | string | null) {
   if (!value) return undefined;
@@ -120,44 +131,88 @@ function mapFeedback(row: FeedbackRow): ActivityFeedbackRecord {
   };
 }
 
-async function interactionIds(table: "proposal_supports" | "proposal_saves", userId?: string) {
-  if (!userId) return [];
-  const rows = await query<{ proposal_id: string }>(`SELECT proposal_id FROM ${table} WHERE user_id = $1 ORDER BY created_at`, [userId]);
+async function interactionIds(table: "proposal_supports" | "proposal_saves", userId: string | undefined, proposalIds: string[]) {
+  if (!userId || !proposalIds.length) return [];
+  const rows = await query<{ proposal_id: string }>(
+    `SELECT proposal_id FROM ${table} WHERE user_id = $1 AND proposal_id = ANY($2::uuid[]) ORDER BY created_at`,
+    [userId, proposalIds],
+  );
   return rows.map((row) => row.proposal_id);
 }
 
-export async function getPlatformSnapshot(userId?: string): Promise<PlatformSnapshot> {
+export async function getPlatformSnapshot(userId?: string, cursor?: SnapshotCursor): Promise<PlatformSnapshot> {
   const feedbackVisibility = userId
     ? `WHERE f.user_id = $1 OR EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = $1 AND viewer.role = 'gef')`
     : "WHERE false";
   const params = userId ? [userId] : [];
-  const [viewerRows, proposalRows, commentRows, activityRows, notificationRows, supporterRows, feedbackRows, questionRows, supported, saved, likedRows] = await Promise.all([
-    userId ? query<{ role: UserRole }>("SELECT role FROM users WHERE id = $1", [userId]) : Promise.resolve([]),
-    query<ProposalRow>(`${proposalSelect} ORDER BY p.created_at DESC`),
-    query<CommentRow>(`SELECT c.*, (SELECT count(*)::int FROM comment_likes cl WHERE cl.comment_id = c.id) AS likes FROM comments c ORDER BY c.created_at`),
-    query<ActivityRow>("SELECT id, proposal_id, title, activity_date, time_label, place, audience, status FROM activities ORDER BY activity_date"),
+  const viewerRows = userId ? await query<{ role: UserRole }>("SELECT role FROM users WHERE id = $1", [userId]) : [];
+  const revealAnonymousIdentity = viewerRows[0]?.role === "gef";
+  const proposalRows = await query<ProposalRow>(
+    `${proposalSelect}
+     WHERE ($1::timestamptz IS NULL OR (p.created_at, p.id) < ($1::timestamptz, $2::uuid))
+     ORDER BY p.created_at DESC, p.id DESC LIMIT ${PROPOSAL_PAGE_SIZE + 1}`,
+    [cursor?.createdAt ?? null, cursor?.id ?? null],
+  );
+  const hasMoreProposals = proposalRows.length > PROPOSAL_PAGE_SIZE;
+  const pageRows = proposalRows.slice(0, PROPOSAL_PAGE_SIZE);
+  const proposalIds = pageRows.map((proposal) => proposal.id);
+  const [commentRows, activityRows, notificationRows, supporterRows, feedbackRows, questionRows, supported, saved] = await Promise.all([
+    proposalIds.length ? query<CommentRow>(
+      `SELECT c.*, (SELECT count(*)::int FROM (SELECT 1 FROM comment_likes cl WHERE cl.comment_id = c.id LIMIT 1001) bounded_likes) AS likes
+       FROM unnest($1::uuid[]) AS selected_proposals(proposal_id)
+       CROSS JOIN LATERAL (
+         SELECT c.*, to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
+         FROM comments c WHERE c.proposal_id = selected_proposals.proposal_id
+         ORDER BY c.created_at DESC, c.id DESC LIMIT ${SNAPSHOT_COMMENTS_PER_PROPOSAL}
+       ) c
+       ORDER BY c.created_at, c.id`,
+      [proposalIds],
+    ) : Promise.resolve([]),
+    query<ActivityRow>("SELECT id, proposal_id, title, activity_date, time_label, place, audience, status FROM activities ORDER BY activity_date DESC, id DESC LIMIT 500"),
     userId ? query<NotificationRow>(`SELECT n.id, n.title, n.body, n.notification_type, n.activity_id, n.proposal_id,
       n.created_at, n.dedupe_key, n.occurrence_count,
       EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.notification_id = n.id AND nr.user_id = $1) AS read
       FROM notifications n
       WHERE (n.recipient_user_id IS NULL OR n.recipient_user_id = $1)
         AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $1))
-      ORDER BY n.created_at DESC`, params) : Promise.resolve([]),
-    query<QueryResultRow & { proposal_id: string; id: string; username: string; class_name: string; anonymous: boolean }>(
-      `SELECT ps.proposal_id, u.id, u.username, u.class_name, p.anonymous
-       FROM proposal_supports ps
-       JOIN users u ON u.id = ps.user_id
-       JOIN proposals p ON p.id = ps.proposal_id
-       ORDER BY ps.created_at`,
-    ),
-    query<FeedbackRow>(`SELECT f.*, u.username, u.class_name FROM activity_feedbacks f JOIN users u ON u.id = f.user_id ${feedbackVisibility} ORDER BY f.created_at`, params),
-    query<ChapaQuestionRow>("SELECT * FROM chapa_questions ORDER BY created_at DESC"),
-    interactionIds("proposal_supports", userId),
-    interactionIds("proposal_saves", userId),
-    userId ? query<{ comment_id: string }>("SELECT comment_id FROM comment_likes WHERE user_id = $1 ORDER BY created_at", [userId]) : Promise.resolve([]),
+      ORDER BY n.created_at DESC LIMIT 100`, params) : Promise.resolve([]),
+    proposalIds.length ? query<QueryResultRow & { proposal_id: string; id: string; username: string; class_name: string; anonymous: boolean }>(
+      `SELECT selected.proposal_id, u.id, u.username, u.class_name, p.anonymous
+       FROM proposals p
+       CROSS JOIN LATERAL (
+         SELECT ps.user_id, ps.proposal_id, ps.created_at FROM proposal_supports ps
+         WHERE ps.proposal_id = p.id
+           AND ($2::boolean OR ($1::uuid IS NOT NULL AND ps.user_id = $1 AND p.anonymous = false))
+         ORDER BY ps.created_at DESC LIMIT 100
+       ) selected
+       JOIN users u ON u.id = selected.user_id
+       WHERE p.id = ANY($3::uuid[])
+       ORDER BY selected.created_at`,
+      [userId ?? null, revealAnonymousIdentity, proposalIds],
+    ) : Promise.resolve([]),
+    query<FeedbackRow>(`SELECT f.*, u.username, u.class_name FROM activity_feedbacks f JOIN users u ON u.id = f.user_id ${feedbackVisibility} ORDER BY f.created_at DESC LIMIT 1000`, params),
+    ELECTIONS_ENABLED ? query<ChapaQuestionRow>("SELECT * FROM chapa_questions ORDER BY created_at DESC LIMIT 1000") : Promise.resolve([]),
+    interactionIds("proposal_supports", userId, proposalIds),
+    interactionIds("proposal_saves", userId, proposalIds),
   ]);
+  const likedRows = userId && commentRows.length
+    ? await query<{ comment_id: string }>("SELECT comment_id FROM comment_likes WHERE user_id = $1 AND comment_id = ANY($2::uuid[]) ORDER BY created_at", [userId, commentRows.map((row) => row.id)])
+    : [];
 
-  const revealAnonymousIdentity = viewerRows[0]?.role === "gef";
+  const commentsByProposal = new Map<string, CommentRow[]>();
+  for (const row of commentRows) {
+    const proposalComments = commentsByProposal.get(row.proposal_id) ?? [];
+    proposalComments.push(row);
+    commentsByProposal.set(row.proposal_id, proposalComments);
+  }
+  const commentCursorsByProposal: Record<string, string | null> = {};
+  for (const proposal of pageRows) {
+    const loadedComments = commentsByProposal.get(proposal.id) ?? [];
+    if (Number(proposal.comments) > loadedComments.length && loadedComments[0]) {
+      commentCursorsByProposal[proposal.id] = timestampCursor(loadedComments[0].cursor_created_at!, loadedComments[0].id);
+    }
+  }
+
   const supportersByProposal: Record<string, SupporterRecord[]> = {};
   for (const row of supporterRows) {
     if (row.anonymous && !revealAnonymousIdentity) continue;
@@ -180,7 +235,7 @@ export async function getPlatformSnapshot(userId?: string): Promise<PlatformSnap
   }));
 
   return {
-    proposals: proposalRows.map((row) => mapProposal(row, revealAnonymousIdentity, userId)),
+    proposals: pageRows.map((row) => mapProposal(row, revealAnonymousIdentity, userId)),
     comments: commentRows.map((row) => mapComment(row, revealAnonymousIdentity)),
     activities: activityRows.map(mapActivity),
     notifications,
@@ -191,6 +246,8 @@ export async function getPlatformSnapshot(userId?: string): Promise<PlatformSnap
     chapas: CHAPAS,
     activityFeedbacks,
     chapaQuestions,
+    commentCursorsByProposal,
+    nextProposalCursor: hasMoreProposals && pageRows.length ? timestampCursor(pageRows[pageRows.length - 1].cursor_created_at, pageRows[pageRows.length - 1].id) : null,
   };
 }
 
@@ -221,17 +278,29 @@ export async function getProposal(id: string, revealAnonymousIdentity = false) {
   return rows[0] ? mapProposal(rows[0], revealAnonymousIdentity) : undefined;
 }
 
-export async function getProposalSupporters(proposalId: string, revealAnonymousIdentity = false) {
+export async function getProposalSupporters(proposalId: string, revealAnonymousIdentity = false, viewerId?: string) {
   const rows = await query<QueryResultRow & { id: string; username: string; class_name: string; anonymous: boolean }>(
     `SELECT u.id, u.username, u.class_name, p.anonymous
      FROM proposal_supports ps
      JOIN users u ON u.id = ps.user_id
      JOIN proposals p ON p.id = ps.proposal_id
-     WHERE ps.proposal_id = $1 ORDER BY ps.created_at`,
-    [proposalId],
+     WHERE ps.proposal_id = $1
+       AND ($2::boolean OR (ps.user_id = $3 AND p.anonymous = false))
+     ORDER BY ps.created_at DESC LIMIT 100`,
+    [proposalId, revealAnonymousIdentity, viewerId ?? null],
   );
   if (rows[0]?.anonymous && !revealAnonymousIdentity) return [];
   return rows.map((row) => ({ id: row.id, name: row.username, turma: row.class_name }));
+}
+
+export async function getProposalUserState(proposalId: string, userId: string) {
+  const rows = await query<{ supported: boolean; saved: boolean }>(
+    `SELECT
+       EXISTS (SELECT 1 FROM proposal_supports WHERE proposal_id = $1 AND user_id = $2) AS supported,
+       EXISTS (SELECT 1 FROM proposal_saves WHERE proposal_id = $1 AND user_id = $2) AS saved`,
+    [proposalId, userId],
+  );
+  return { supported: Boolean(rows[0]?.supported), saved: Boolean(rows[0]?.saved) };
 }
 
 export async function addComment(proposalId: string, input: {
@@ -239,8 +308,19 @@ export async function addComment(proposalId: string, input: {
 }) {
   const id = randomUUID();
   await transaction(async (tx) => {
-    const proposals = await tx<{ author_id: string | null; title: string }>("SELECT author_id, title FROM proposals WHERE id = $1", [proposalId]);
+    const proposals = await tx<{ author_id: string | null; title: string; status: ProposalStatus }>(
+      "SELECT author_id, title, status FROM proposals WHERE id = $1 FOR UPDATE",
+      [proposalId],
+    );
     if (!proposals[0]) throw new Error("PROPOSAL_NOT_FOUND");
+    if (proposals[0].status === "cancelled") throw new Error("PROPOSAL_CANCELLED");
+    if (input.parentId) {
+      const parent = await tx<{ id: string }>(
+        "SELECT id FROM comments WHERE id = $1 AND proposal_id = $2",
+        [input.parentId, proposalId],
+      );
+      if (!parent[0]) throw new Error("COMMENT_PARENT_MISMATCH");
+    }
     await tx(
       `INSERT INTO comments (id, proposal_id, author_id, author_name, author_role, anonymous, body, parent_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -404,18 +484,32 @@ export async function getActivity(activityId: string) {
 
 export async function getActivities() {
   const rows = await query<ActivityRow>(
-    "SELECT id, proposal_id, title, activity_date, time_label, place, audience, status FROM activities ORDER BY activity_date",
+    "SELECT id, proposal_id, title, activity_date, time_label, place, audience, status FROM activities ORDER BY activity_date DESC, id DESC LIMIT 500",
   );
   return rows.map(mapActivity);
 }
 
-export async function getComments(proposalId: string, revealAnonymousIdentity = false) {
+export async function getComments(proposalId: string, revealAnonymousIdentity = false, cursor?: SnapshotCursor, viewerId?: string) {
   const rows = await query<CommentRow>(
-    `SELECT c.*, (SELECT count(*)::int FROM comment_likes cl WHERE cl.comment_id = c.id) AS likes
-     FROM comments c WHERE c.proposal_id = $1 ORDER BY c.created_at`,
-    [proposalId],
+    `SELECT page.* FROM (
+       SELECT c.*, to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at,
+         (SELECT count(*)::int FROM (SELECT 1 FROM comment_likes cl WHERE cl.comment_id = c.id LIMIT 1001) bounded_likes) AS likes,
+         ($4::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM comment_likes own_like WHERE own_like.comment_id = c.id AND own_like.user_id = $4)) AS liked_by_viewer
+       FROM comments c
+       WHERE c.proposal_id = $1
+         AND ($2::timestamptz IS NULL OR (c.created_at, c.id) < ($2::timestamptz, $3::uuid))
+       ORDER BY c.created_at DESC, c.id DESC LIMIT 101
+     ) page ORDER BY page.created_at, page.id`,
+    [proposalId, cursor?.createdAt ?? null, cursor?.id ?? null, viewerId ?? null],
   );
-  return rows.map((row) => mapComment(row, revealAnonymousIdentity));
+  const hasMore = rows.length > 100;
+  const pageRows = rows.slice(hasMore ? 1 : 0);
+  const comments = pageRows.map((row) => mapComment(row, revealAnonymousIdentity));
+  return {
+    comments,
+    likedCommentIds: viewerId ? pageRows.filter((row) => Boolean(row.liked_by_viewer)).map((row) => row.id) : [],
+    nextCursor: hasMore && pageRows[0] ? timestampCursor(pageRows[0].cursor_created_at!, pageRows[0].id) : null,
+  };
 }
 
 export async function getComment(commentId: string) {
@@ -434,7 +528,7 @@ export async function getNotifications(userId: string) {
      FROM notifications n
      WHERE (n.recipient_user_id IS NULL OR n.recipient_user_id = $1)
        AND (n.recipient_role IS NULL OR n.recipient_role = (SELECT role FROM users WHERE id = $1))
-     ORDER BY n.created_at DESC`,
+     ORDER BY n.created_at DESC LIMIT 100`,
     [userId],
   );
   return collapseNotifications(rows).map((notification) => ({
@@ -448,15 +542,23 @@ export async function createActivity(input: {
 }) {
   const id = randomUUID();
   const created = await transaction(async (tx) => {
+    const proposals = await tx<{ status: ProposalStatus }>(
+      "SELECT status FROM proposals WHERE id = $1 FOR UPDATE",
+      [input.proposalId],
+    );
+    if (!proposals[0] || (proposals[0].status !== "analysis" && proposals[0].status !== "development")) return false;
+
     const inserted = await tx<{ id: string }>(
       `INSERT INTO activities (id, proposal_id, title, activity_date, time_label, place, audience)
-       SELECT $1, p.id, $3, $4::date, $5, $6, $7 FROM proposals p
-       WHERE p.id = $2 AND p.status IN ('analysis', 'development')
-       RETURNING id`,
+       VALUES ($1, $2, $3, $4::date, $5, $6, $7) RETURNING id`,
       [id, input.proposalId, input.title, input.date, input.time, input.place, input.audience],
     );
     if (!inserted[0]) return false;
-    await tx("UPDATE proposals SET status = 'scheduled', updated_at = now() WHERE id = $1", [input.proposalId]);
+    const scheduled = await tx<{ id: string }>(
+      "UPDATE proposals SET status = 'scheduled', updated_at = now() WHERE id = $1 AND status IN ('analysis', 'development') RETURNING id",
+      [input.proposalId],
+    );
+    if (!scheduled[0]) throw new Error("PROPOSAL_STATUS_CHANGED");
     await createNotification(tx, {
       dedupeKey: notificationKey("activity", id, "created"),
       title: "Nova atividade na agenda",
@@ -508,11 +610,13 @@ export async function submitActivityFeedback(activityId: string, feedback: {
   return rows[0] ? mapFeedback(rows[0]) : null;
 }
 
-export async function getActivityFeedbacks(activityId: string) {
+export async function getActivityFeedbacks(activityId: string, userId?: string) {
   const rows = await query<FeedbackRow>(
     `SELECT f.*, u.username, u.class_name FROM activity_feedbacks f
-     JOIN users u ON u.id = f.user_id WHERE f.activity_id = $1 ORDER BY f.created_at`,
-    [activityId],
+     JOIN users u ON u.id = f.user_id
+     WHERE f.activity_id = $1 AND ($2::uuid IS NULL OR f.user_id = $2)
+     ORDER BY f.created_at DESC LIMIT 500`,
+    [activityId, userId ?? null],
   );
   return rows.map(mapFeedback);
 }
@@ -679,7 +783,14 @@ export async function importLegacyData(importedBy: string, payload: LegacyImport
       if (!comment.parentId) continue;
       const id = commentIds.get(comment.id);
       const parentId = commentIds.get(comment.parentId);
-      if (id && parentId) await tx("UPDATE comments SET parent_id = $2 WHERE id = $1", [id, parentId]);
+      if (id && parentId) {
+        await tx(
+          `UPDATE comments AS child SET parent_id = $2
+           FROM comments AS parent
+           WHERE child.id = $1 AND parent.id = $2 AND child.proposal_id = parent.proposal_id`,
+          [id, parentId],
+        );
+      }
     }
 
     for (const activity of payload.activities) {

@@ -20,10 +20,10 @@ async function responseJson(response: Response) {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
 
-export async function loadPlatform(signal: AbortSignal, fetcher: FetchLike = fetch) {
+export async function loadPlatform(signal: AbortSignal, fetcher: FetchLike = fetch, cursor?: string) {
   const [authResponse, platformResponse] = await Promise.all([
     fetcher("/api/auth/me", { signal, cache: "no-store" }),
-    fetcher("/api/platform", { signal, cache: "no-store" }),
+    fetcher(cursor ? `/api/platform?cursor=${encodeURIComponent(cursor)}` : "/api/platform", { signal, cache: "no-store" }),
   ]);
   const [authBody, platformBody] = await Promise.all([responseJson(authResponse), responseJson(platformResponse)]);
   if (!authResponse.ok) throw new Error(typeof authBody.error === "string" ? authBody.error : "Não foi possível verificar a sessão.");
@@ -31,6 +31,44 @@ export async function loadPlatform(signal: AbortSignal, fetcher: FetchLike = fet
   if (!platformBody.data || typeof platformBody.data !== "object") throw new Error("A plataforma retornou uma resposta inválida.");
   const user = authBody.user && typeof authBody.user === "object" ? authBody.user as PlatformUser : null;
   return { user, snapshot: platformBody.data as PlatformSnapshot };
+}
+
+export function mergeById<T extends { id: string }>(current: T[], next: T[]) {
+  return [...new Map([...current, ...next].map((item) => [item.id, item])).values()];
+}
+
+function mergeIds(current: string[] = [], next: string[] = []) {
+  return [...new Set([...current, ...next])];
+}
+
+export function mergePlatformPage(current: PlatformSnapshot, next: PlatformSnapshot, userId: string): PlatformSnapshot {
+  return {
+    ...current,
+    proposals: mergeById(current.proposals, next.proposals),
+    comments: mergeById(next.comments, current.comments),
+    activities: mergeById(current.activities, next.activities),
+    notifications: mergeById(current.notifications, next.notifications),
+    commentCursorsByProposal: { ...current.commentCursorsByProposal, ...next.commentCursorsByProposal },
+    supportedByUser: {
+      ...current.supportedByUser,
+      ...next.supportedByUser,
+      [userId]: mergeIds(current.supportedByUser[userId], next.supportedByUser[userId]),
+    },
+    savedByUser: {
+      ...current.savedByUser,
+      ...next.savedByUser,
+      [userId]: mergeIds(current.savedByUser[userId], next.savedByUser[userId]),
+    },
+    likedCommentsByUser: {
+      ...current.likedCommentsByUser,
+      ...next.likedCommentsByUser,
+      [userId]: mergeIds(current.likedCommentsByUser[userId], next.likedCommentsByUser[userId]),
+    },
+    supportersByProposal: { ...current.supportersByProposal, ...next.supportersByProposal },
+    activityFeedbacks: next.activityFeedbacks,
+    chapaQuestions: next.chapaQuestions,
+    nextProposalCursor: next.nextProposalCursor,
+  };
 }
 
 export function beginInteraction(revisions: Map<string, number>, key: string, now = Date.now()) {

@@ -6,11 +6,16 @@ O backend usa Neon Postgres como fonte única e compartilhada entre as instânci
 
 As tabelas e restrições ficam em `db/migrations/0001_initial.sql` e migrations seguintes. Contagens de apoios, comentários e avaliações são derivadas das relações. As chaves únicas de apoio, acompanhamento, curtida e avaliação tornam requisições repetidas idempotentes. `0002_interaction_revisions.sql` registra a revisão mais recente por ação para rejeitar requisições atrasadas.
 
+`0007_request_rate_limits.sql` guarda janelas de limite compartilhadas entre instâncias. As chaves são HMAC, não armazenam IP ou nome de usuário em texto; registros expirados são removidos gradualmente durante o uso.
+
 Variáveis obrigatórias, sempre fora do Git:
 
 - `DATABASE_URL`: conexão usada pela aplicação;
 - `DATABASE_URL_UNPOOLED`: conexão preferida pelo migrador;
+- `RATE_LIMIT_SECRET`: segredo opcional para HMAC das chaves de limite; por padrão, usa `DATABASE_URL`;
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_CLASS`: seed controlado da conta GEF.
+
+Testes de integração que alteram o banco exigem `TEST_DATABASE_URL` apontando para localhost. Um banco remoto só é aceito com `ALLOW_REMOTE_TEST_DATABASE=true`; não use os bancos de produção para testes.
 
 ## Autenticação
 
@@ -18,12 +23,12 @@ Contas são persistidas no banco. A senha é armazenada somente como hash `scryp
 
 O cookie usa `SameSite=Lax`, caminho `/`, duração de sete dias e `Secure` em produção. Logout revoga a sessão no banco. Nenhum endpoint público devolve hashes, tokens ou a lista de contas.
 
-O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Foto, token e ID token não são armazenados.
+O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI`. O callback verifica assinatura, público, expiração e nonce do ID token; só aceita email verificado com `hd` e domínio do email exatamente `farroups.com.br`. Contas novas recebem papel de estudante. Uma conta GEF existente só pode usar Google depois que a equipe vincular seu email verificado ao registro no banco. Contas antigas de estudantes também precisam ter o email escolar vinculado para preservar a identidade e o histórico. Foto, token e ID token não são armazenados. Cadastro e login por senha de estudantes estão desativados; a senha continua disponível somente para a conta operacional do GEF.
 
 ## Endpoints
 
 - `GET /api/health`: confirma processo e conexão com o banco; falha com 503 quando o Neon está indisponível.
-- `POST /api/auth/login`, `POST /api/auth/signup`, `GET /api/auth/me`, `POST /api/auth/logout`.
+- `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`; `POST /api/auth/signup` retorna 410.
 - `GET /api/auth/google` e `GET /api/auth/google/callback`.
 - `POST /api/proposals/:id/cancel`: apenas o autor pode cancelar antes do agendamento.
 - `GET/POST /api/proposals`.
@@ -36,10 +41,12 @@ O login Google usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT
 - `GET/POST /api/activities/:id/feedback`.
 - `GET/PATCH /api/notifications`.
 - `GET /api/chapas` e `GET/POST/PATCH /api/chapas/questions`: retornam 410 até uma eleição ser configurada; a flag está em `src/lib/feature-flags.ts`.
-- `GET /api/platform`: snapshot público e específico da sessão.
+- `GET /api/platform`: snapshot público e específico da sessão, com até 50 propostas por página e cursor opaco em `nextProposalCursor`.
+- `GET /api/proposals?cursor=...`: página de propostas; `X-Next-Cursor` aponta para a próxima página sem alterar o formato `{ data: [...] }`.
+- `GET /api/proposals/:id/comments?cursor=...`: comentários em páginas de até 100, com `nextCursor` e os IDs curtidos pelo usuário atual.
 - `POST /api/admin/legacy-import`: importação GEF idempotente de dados antigos do navegador.
 
-Respostas de domínio usam `{ data }`; falhas usam `{ error }` com status 400, 401, 403, 404, 409, 410 ou 503. Dados dinâmicos usam `Cache-Control: no-store, max-age=0` e respostas específicas da sessão variam por cookie.
+Respostas de domínio usam `{ data }`; falhas usam `{ error }` com status 400, 401, 403, 404, 409, 410, 429 ou 503. Dados dinâmicos usam `Cache-Control: no-store, max-age=0` e respostas específicas da sessão variam por cookie. O snapshot carrega 50 propostas e os 20 comentários mais recentes por proposta; seus cursores e o endpoint de comentários recuperam o histórico sob demanda.
 
 ## Concorrência e cliente
 
@@ -72,6 +79,8 @@ pnpm typecheck
 pnpm build
 ```
 
-As migrações desta entrega são aditivas. Antes de mudanças destrutivas futuras, criar backup no Neon e uma migration reversível. Rate limiting distribuído e verificação de vínculo escolar continuam sendo requisitos antes de abertura ampla para toda a comunidade.
+As migrações desta entrega são aditivas. Antes de mudanças destrutivas futuras, criar backup no Neon e uma migration reversível. O rate limiting distribuído cobre login, leituras públicas e gravações de conteúdo. A configuração do WAF da Vercel não é inspecionada por este repositório e continua recomendada como proteção anterior à execução das funções.
 
-Antes de publicar esta versão, executar `pnpm db:migrate` contra o banco configurado, incluindo `0005_participation_workflows.sql` e `0006_google_auth.sql`. Registrar a URL exata do callback Google como URI autorizada no console OAuth.
+O seed GEF atualiza somente um usuário que já tenha papel `gef`. Se `ADMIN_USERNAME` colidir com uma conta de estudante, escolha outro nome; o seed não promove nem reaproveita a sessão dessa conta.
+
+Antes de publicar esta versão, executar `pnpm db:migrate` contra o banco configurado, incluindo `0005_participation_workflows.sql`, `0006_google_auth.sql` e `0007_request_rate_limits.sql`. Registrar a URL exata do callback Google como URI autorizada no console OAuth.

@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 import { Pool } from "@neondatabase/serverless";
+import { getTestDatabaseUrl } from "./test-database.ts";
 
-try {
-  process.loadEnvFile(path.join(process.cwd(), ".env.local"));
-} catch {}
+const testDatabaseUrl = getTestDatabaseUrl();
 
 test("passwords are stored as versioned scrypt hashes and verified safely", async () => {
   assert.equal(existsSync("src/lib/password.ts"), true, "password module must exist");
@@ -22,7 +20,7 @@ test("passwords are stored as versioned scrypt hashes and verified safely", asyn
   assert.equal(await verifyPassword(password, "hash-invalido"), false);
 });
 
-test("database sessions expire and can be revoked without storing raw tokens", { skip: !process.env.DATABASE_URL }, async () => {
+test("database sessions expire and can be revoked without storing raw tokens", { skip: !testDatabaseUrl }, async () => {
   assert.equal(existsSync("src/lib/auth-repository.ts"), true, "auth repository must exist");
   assert.equal(existsSync("src/lib/session-token.ts"), true, "session token helpers must exist");
   const auth = await import("../src/lib/auth-repository.ts");
@@ -30,13 +28,12 @@ test("database sessions expire and can be revoked without storing raw tokens", {
   const { hashPassword } = await import("../src/lib/password.ts");
 
   const username = `auth-${randomBytes(8).toString("hex")}`;
-  const account = await auth.createAccount({
+  const account = await auth.upsertGefAccount({
     name: username,
-    turma: "3º EM A",
-    role: "student",
+    turma: "GEF",
     passwordHash: await hashPassword("senha-segura-123"),
   });
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: testDatabaseUrl! });
 
   try {
     assert.equal("passwordHash" in account, false, "public account DTO must not expose hashes");

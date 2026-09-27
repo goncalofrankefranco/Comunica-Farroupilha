@@ -2,13 +2,16 @@ import { dataResponse, errorResponse, readJsonObject, unavailableResponse } from
 import { getActivity, updateActivityStatus } from "@/lib/platform-repository";
 import type { ActivityStatus } from "@/lib/platform-types";
 import { getSessionUser } from "@/lib/session";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 const statuses: ActivityStatus[] = ["upcoming", "done", "cancelled"];
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
+    const limited = await enforceRequestLimit(request, "activity-detail-read", 2000, 60);
+    if (limited) return limited;
     const activity = await getActivity((await context.params).id);
     return activity ? dataResponse(activity) : errorResponse("Atividade não encontrada.", 404);
   } catch (error) { return unavailableResponse("get-activity", error); }

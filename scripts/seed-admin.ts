@@ -1,5 +1,5 @@
 import path from "node:path";
-import { upsertAccount } from "../src/lib/auth-repository.ts";
+import { upsertGefAccount } from "../src/lib/auth-repository.ts";
 import { closeDatabasePool } from "../src/lib/db.ts";
 import { hashPassword } from "../src/lib/password.ts";
 
@@ -14,7 +14,7 @@ const turma = process.env.ADMIN_CLASS?.trim() || "GEF";
 if (!name || !password) throw new Error("ADMIN_USERNAME e ADMIN_PASSWORD são obrigatórias.");
 
 try {
-  const user = await upsertAccount({ name, turma, role: "gef", passwordHash: await hashPassword(password) });
+  const user = await upsertGefAccount({ name, turma, passwordHash: await hashPassword(password) });
   console.log(`Conta GEF preparada: ${user.name}`);
 } finally {
   await closeDatabasePool();

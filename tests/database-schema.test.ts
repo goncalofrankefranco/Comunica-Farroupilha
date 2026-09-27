@@ -63,3 +63,23 @@ test("Google migration links verified identities without requiring a local passw
   assert.match(source, /users_email_unique_idx/);
   assert.match(source, /users_google_sub_unique_idx/);
 });
+
+test("rate limit migration stores hashed, expiring shared request budgets", () => {
+  const source = readFileSync("db/migrations/0007_request_rate_limits.sql", "utf8");
+  assert.match(source, /CREATE TABLE IF NOT EXISTS request_rate_limits/);
+  assert.match(source, /bucket_hash TEXT PRIMARY KEY/);
+  assert.match(source, /expires_at TIMESTAMPTZ NOT NULL/);
+  assert.match(source, /request_rate_limits_expires_at_idx/);
+  assert.match(source, /proposal_supports_created_at_idx/);
+  assert.match(source, /proposal_saves_user_created_idx/);
+  assert.match(source, /comment_likes_user_comment_idx/);
+  assert.match(source, /activity_feedbacks_activity_created_idx/);
+  assert.match(source, /activity_feedbacks_created_idx/);
+});
+
+test("database integration tests require a dedicated, guarded database URL", () => {
+  const source = readFileSync("tests/test-database.ts", "utf8");
+  assert.match(source, /TEST_DATABASE_URL/);
+  assert.match(source, /ALLOW_REMOTE_TEST_DATABASE !== "true"/);
+  assert.match(source, /process\.env\.DATABASE_URL = databaseUrl/);
+});

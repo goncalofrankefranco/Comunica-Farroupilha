@@ -20,6 +20,12 @@ test("proposal creation navigates to and scrolls the new proposal into view", ()
   assert.match(shell, /setQuery\(""\)/);
 });
 
+test("notifications can open proposals outside the first paginated snapshot page", () => {
+  assert.match(shell, /fetch\(`\/api\/proposals\/\$\{id\}`/);
+  assert.match(shell, /fetch\(`\/api\/proposals\/\$\{id\}\/comments`/);
+  assert.match(shell, /setPendingProposalScrollId\(id\)/);
+});
+
 test("opening the proposal composer scrolls the form into view", () => {
   assert.match(shell, /id="proposal-composer"/);
   assert.match(shell, /document\.getElementById\("proposal-composer"\).*scrollIntoView/s);
@@ -45,6 +51,7 @@ test("notifications have categories, filters, and actionable destinations", () =
   assert.match(shell, /filterNotifications\(/);
   assert.match(shell, /getNotificationDestination\(/);
   assert.match(shell, /openNotification\(/);
+  assert.match(shell, /fetch\(`\/api\/activities\/\$\{destination\.activityId\}`/);
   assert.match(shell, /notification\.type/);
   assert.match(readFileSync("src/lib/platform-types.ts", "utf8"), /type NotificationType/);
   assert.match(readFileSync("db/migrations/0005_participation_workflows.sql", "utf8"), /recipient_role TEXT/);
@@ -57,6 +64,7 @@ test("agenda uses the local current date and validates activity dates", () => {
   assert.match(shell, /isValidDateKey\(/);
   assert.match(shell, /className="calendar-today"/);
   assert.match(shell, /Aguardando atualização/);
+  assert.match(shell, /activity-no-proposals/);
   assert.match(shell, /type="date"[^>]*min=/);
 });
 
@@ -79,7 +87,11 @@ test("Google login verifies the allowed institutional identity on the server", (
   assert.match(shell, /Continuar com Google/);
 });
 
-test("local signup cannot claim a Google account without a password hash", () => {
+test("student accounts can only be created and authenticated through verified Google identity", () => {
   const signup = readFileSync("src/app/api/auth/signup/route.ts", "utf8");
-  assert.match(signup, /!existing\.passwordHash/);
+  const login = readFileSync("src/app/api/auth/login/route.ts", "utf8");
+  assert.match(signup, /status:\s*410/);
+  assert.match(login, /credentials\?\.user\.role\s*!==\s*["']gef["']/);
+  assert.doesNotMatch(shell, /Criar conta|Criar minha conta|onSignup/);
+  assert.match(shell, /Google verificada @farroups\.com\.br/);
 });

@@ -1,6 +1,7 @@
 import { dataResponse, errorResponse, readJsonObject, unavailableResponse } from "@/lib/http";
 import { sanitizeLegacyImport } from "@/lib/legacy-import";
 import { importLegacyData } from "@/lib/platform-repository";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 import { getSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ export async function POST(request: Request) {
     const user = await getSessionUser();
     if (!user) return errorResponse("Faça login para importar dados antigos.", 401);
     if (user.role !== "gef") return errorResponse("Somente o GEF pode importar dados antigos.", 403);
+    const limited = await enforceRequestLimit(request, "legacy-import", 10, 86_400, user.id);
+    if (limited) return limited;
     const body = await readJsonObject(request);
     if (!body) return errorResponse("Envie um JSON válido.", 400);
     const payload = sanitizeLegacyImport(body);

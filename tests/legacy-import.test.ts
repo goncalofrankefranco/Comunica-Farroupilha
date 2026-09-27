@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 import { Pool } from "@neondatabase/serverless";
+import { getTestDatabaseUrl } from "./test-database.ts";
 
-try { process.loadEnvFile(path.join(process.cwd(), ".env.local")); } catch {}
+const testDatabaseUrl = getTestDatabaseUrl();
 
 test("legacy sanitizer removes credentials and bounds imported domain data", async () => {
   assert.equal(existsSync("src/lib/legacy-import.ts"), true, "legacy sanitizer must exist");
@@ -38,10 +38,10 @@ test("legacy sanitizer removes credentials and bounds imported domain data", asy
   assert.deepEqual(previewLegacyState(raw), { proposals: 500, comments: 1, activities: 0, chapaQuestions: 0 });
 });
 
-test("legacy import is transactional and idempotent", { skip: !process.env.DATABASE_URL }, async () => {
+test("legacy import is transactional and idempotent", { skip: !testDatabaseUrl }, async () => {
   const { sanitizeLegacyImport } = await import("../src/lib/legacy-import.ts");
   const { importLegacyData, getPlatformSnapshot } = await import("../src/lib/platform-repository.ts");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: testDatabaseUrl! });
   const userId = randomUUID();
   const marker = randomUUID();
   await pool.query(

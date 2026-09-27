@@ -1,26 +1,38 @@
-import { findAccountCredentials } from "@/lib/auth-repository";
+import { findAccountCredentials, normalizeUsername } from "@/lib/auth-repository";
+import { unavailableResponse } from "@/lib/http";
 import { verifyPassword } from "@/lib/password";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 import { startSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  let body: { name?: unknown; password?: unknown };
   try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Envie um JSON válido." }, { status: 400 });
-  }
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  if (!name || !password || name.length > 160 || password.length > 256) {
-    return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
-  }
+    const ipLimit = await enforceRequestLimit(request, "auth-login", 20, 600);
+    if (ipLimit) return ipLimit;
 
-  const credentials = await findAccountCredentials(name);
-  if (!credentials?.passwordHash || !(await verifyPassword(password, credentials.passwordHash))) {
-    return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
+    let body: { name?: unknown; password?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: "Envie um JSON válido." }, { status: 400 });
+    }
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!name || !password || name.length > 160 || password.length > 256) {
+      return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
+    }
+
+    const accountLimit = await enforceRequestLimit(request, `auth-login:${normalizeUsername(name)}`, 8, 600);
+    if (accountLimit) return accountLimit;
+
+    const credentials = await findAccountCredentials(name);
+    if (credentials?.user.role !== "gef" || !credentials.passwordHash || !(await verifyPassword(password, credentials.passwordHash))) {
+      return Response.json({ error: "Nome de usuário ou senha incorretos." }, { status: 401 });
+    }
+    await startSession(credentials.user);
+    return Response.json({ user: credentials.user });
+  } catch (error) {
+    return unavailableResponse("login", error);
   }
-  await startSession(credentials.user);
-  return Response.json({ user: credentials.user });
 }

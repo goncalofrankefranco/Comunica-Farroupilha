@@ -2,19 +2,27 @@ import { dataResponse, errorResponse, readJsonObject, requiredString, unavailabl
 import { createActivity, getActivities, getProposal } from "@/lib/platform-repository";
 import { getSessionUser } from "@/lib/session";
 import { isValidDateKey } from "@/lib/participation-domain";
+import { enforceRequestLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try { return dataResponse(await getActivities()); }
-  catch (error) { return unavailableResponse("list-activities", error); }
+export async function GET(request: Request) {
+  try {
+    const limited = await enforceRequestLimit(request, "activities-read", 2000, 60);
+    if (limited) return limited;
+    return dataResponse(await getActivities());
+  } catch (error) { return unavailableResponse("list-activities", error); }
 }
 
 export async function POST(request: Request) {
   try {
+    const ipLimit = await enforceRequestLimit(request, "activity-create-ip", 40, 3600);
+    if (ipLimit) return ipLimit;
     const user = await getSessionUser();
     if (!user) return errorResponse("Faça login para criar uma atividade.", 401);
     if (user.role !== "gef") return errorResponse("Somente o GEF pode criar atividades.", 403);
+    const userLimit = await enforceRequestLimit(request, "activity-create", 20, 3600, user.id);
+    if (userLimit) return userLimit;
     const body = await readJsonObject(request);
     if (!body) return errorResponse("Envie um JSON válido.", 400);
     const proposalId = requiredString(body.proposalId, { max: 64 });

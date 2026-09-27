@@ -21,16 +21,6 @@ export function normalizeUsername(name: string) {
   return name.trim().normalize("NFKC").toLocaleLowerCase("pt-BR");
 }
 
-export async function createAccount(input: { name: string; turma: string; role: UserRole; passwordHash: string }) {
-  const rows = await query<UserRow>(
-    `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, username, class_name, role, password_hash`,
-    [randomUUID(), input.name.trim(), normalizeUsername(input.name), input.turma.trim(), input.role, input.passwordHash],
-  );
-  return mapUser(rows[0]);
-}
-
 export async function upsertGoogleAccount(input: { email: string; name: string; sub: string }) {
   const email = input.email.trim().toLowerCase();
   const linked = await query<UserRow>(
@@ -59,16 +49,18 @@ export async function upsertGoogleAccount(input: { email: string; name: string; 
   return mapUser(rows[0]);
 }
 
-export async function upsertAccount(input: { name: string; turma: string; role: UserRole; passwordHash: string }) {
+export async function upsertGefAccount(input: { name: string; turma: string; passwordHash: string }) {
   const rows = await query<UserRow>(
     `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash)
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, 'gef', $5)
      ON CONFLICT (username_normalized) DO UPDATE SET
-       username = EXCLUDED.username, class_name = EXCLUDED.class_name, role = EXCLUDED.role,
+       username = EXCLUDED.username, class_name = EXCLUDED.class_name,
        password_hash = EXCLUDED.password_hash, updated_at = now()
+     WHERE users.role = 'gef'
      RETURNING id, username, class_name, role, password_hash`,
-    [randomUUID(), input.name.trim(), normalizeUsername(input.name), input.turma.trim(), input.role, input.passwordHash],
+    [randomUUID(), input.name.trim(), normalizeUsername(input.name), input.turma.trim(), input.passwordHash],
   );
+  if (!rows[0]) throw new Error("GEF_USERNAME_CONFLICT");
   return mapUser(rows[0]);
 }
 
