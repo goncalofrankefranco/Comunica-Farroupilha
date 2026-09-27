@@ -84,15 +84,18 @@ test("Google login verifies the allowed institutional identity on the server", (
   assert.match(callback, /verifyIdToken/);
   assert.match(callback, /isAllowedGoogleIdentity\(/);
   assert.match(callback, /nonce/);
-  assert.match(shell, /Continuar com Google/);
+  assert.doesNotMatch(shell, /Continuar com Google/);
 });
 
-test("student password fallback is gated and new accounts still require Google", () => {
+test("student signup works temporarily without Google and legacy linking is not shown", () => {
   const signup = readFileSync("src/app/api/auth/signup/route.ts", "utf8");
   const login = readFileSync("src/app/api/auth/login/route.ts", "utf8");
-  assert.match(signup, /status:\s*410/);
+  assert.match(signup, /STUDENT_PASSWORD_AUTH_ENABLED !== "true"/);
+  assert.match(signup, /parseStudentSignup/);
+  assert.match(signup, /createStudentAccount/);
   assert.match(login, /canUsePasswordLogin/);
   assert.match(login, /STUDENT_PASSWORD_AUTH_ENABLED === "true"/);
-  assert.doesNotMatch(shell, /Criar conta|Criar minha conta|onSignup/);
-  assert.match(shell, /Novos cadastros continuam dependendo da conta escolar verificada/);
+  assert.match(shell, /Criar conta/);
+  assert.match(shell, /onSignup/);
+  assert.doesNotMatch(shell, /Já tinha uma conta\? Vincular histórico|legacy-link-form|Continuar com Google/);
 });

@@ -64,6 +64,16 @@ export async function upsertGefAccount(input: { name: string; turma: string; pas
   return mapUser(rows[0]);
 }
 
+export async function createStudentAccount(input: { name: string; turma: string; passwordHash: string }) {
+  const rows = await query<UserRow>(
+    `INSERT INTO users (id, username, username_normalized, class_name, role, password_hash)
+     VALUES ($1, $2, $3, $4, 'student', $5)
+     RETURNING id, username, class_name, role, password_hash`,
+    [randomUUID(), input.name.trim(), normalizeUsername(input.name), input.turma.trim(), input.passwordHash],
+  );
+  return mapUser(rows[0]);
+}
+
 export async function findAccountCredentials(name: string) {
   const rows = await query<UserRow>(
     "SELECT id, username, class_name, role, password_hash FROM users WHERE username_normalized = $1",

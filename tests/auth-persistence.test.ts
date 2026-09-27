@@ -20,6 +20,35 @@ test("passwords are stored as versioned scrypt hashes and verified safely", asyn
   assert.equal(await verifyPassword(password, "hash-invalido"), false);
 });
 
+test("student signup creates only a student account and rejects case-insensitive duplicates", { skip: !testDatabaseUrl }, async () => {
+  const auth = await import("../src/lib/auth-repository.ts");
+  const { hashPassword } = await import("../src/lib/password.ts");
+  const pool = new Pool({ connectionString: testDatabaseUrl! });
+  const username = `student-${randomBytes(8).toString("hex")}`;
+
+  try {
+    const account = await auth.createStudentAccount({
+      name: username,
+      turma: "1º ano A",
+      passwordHash: await hashPassword("senha-estudante-segura"),
+    });
+    assert.equal(account.role, "student");
+    assert.equal("passwordHash" in account, false);
+    await assert.rejects(auth.createStudentAccount({
+      name: username.toUpperCase(),
+      turma: "1º ano A",
+      passwordHash: await hashPassword("outra-senha-segura"),
+    }), { code: "23505" });
+
+    const stored = await pool.query("SELECT role, password_hash FROM users WHERE id = $1", [account.id]);
+    assert.equal(stored.rows[0]?.role, "student");
+    assert.match(stored.rows[0]?.password_hash, /^scrypt\$v1\$/);
+  } finally {
+    await pool.query("DELETE FROM users WHERE username_normalized = $1", [auth.normalizeUsername(username)]);
+    await pool.end();
+  }
+});
+
 test("database sessions expire and can be revoked without storing raw tokens", { skip: !testDatabaseUrl }, async () => {
   assert.equal(existsSync("src/lib/auth-repository.ts"), true, "auth repository must exist");
   assert.equal(existsSync("src/lib/session-token.ts"), true, "session token helpers must exist");

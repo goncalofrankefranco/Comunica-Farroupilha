@@ -18,7 +18,6 @@ import {
 } from "@/lib/client-platform-state";
 import { previewLegacyState, sanitizeLegacyImport } from "@/lib/legacy-import";
 import { ELECTIONS_ENABLED } from "@/lib/feature-flags";
-import { getAuthErrorMessage } from "@/lib/auth-errors";
 import {
   canCancelProposal,
   filterNotifications,
@@ -54,19 +53,6 @@ function getLocalDateSnapshot() {
 }
 
 function getServerDateSnapshot() {
-  return "";
-}
-
-function subscribeToAuthLocation(onChange: () => void) {
-  window.addEventListener("popstate", onChange);
-  return () => window.removeEventListener("popstate", onChange);
-}
-
-function getAuthErrorSnapshot() {
-  return new URLSearchParams(window.location.search).get("authError") ?? "";
-}
-
-function getServerAuthErrorSnapshot() {
   return "";
 }
 
@@ -1232,58 +1218,30 @@ function ActivityComposer({ proposals, initialProposalId, onCancel, onCreate }: 
   );
 }
 
-function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Promise<string | null> }) {
+function AuthView({
+  onLogin,
+  onSignup,
+}: {
+  onLogin: (name: string, password: string) => Promise<string | null>;
+  onSignup: (name: string, turma: string, password: string) => Promise<string | null>;
+}) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
+  const [turma, setTurma] = useState("");
   const [password, setPassword] = useState("");
-  const [legacyUsername, setLegacyUsername] = useState("");
-  const [legacyPassword, setLegacyPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [legacyLinkRequested, setLegacyLinkRequested] = useState(false);
-  const authErrorCode = useSyncExternalStore(subscribeToAuthLocation, getAuthErrorSnapshot, getServerAuthErrorSnapshot);
-  const displayedError = error || getAuthErrorMessage(authErrorCode);
-  const legacyLinkOpen = legacyLinkRequested || authErrorCode.startsWith("legacy-link-");
-
-  function clearError() {
-    setError("");
-    if (authErrorCode) {
-      window.history.replaceState(null, "", "/app");
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    }
-  }
+  const displayedError = error;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    clearError();
-    const result = await onLogin(name.trim(), password);
+    setError("");
+    const result = mode === "login"
+      ? await onLogin(name.trim(), password)
+      : await onSignup(name.trim(), turma.trim(), password);
     setBusy(false);
     if (result) setError(result);
-  }
-
-  async function submitLegacyLink(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setLegacyLinkRequested(true);
-    clearError();
-    try {
-      const response = await fetch("/api/auth/link-legacy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: legacyUsername, password: legacyPassword }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        setBusy(false);
-        setError(result.error || "Não foi possível validar essa conta antiga.");
-        return;
-      }
-      const continueTo = typeof result.data?.continueTo === "string" ? result.data.continueTo : "/api/auth/google?mode=link";
-      window.location.assign(continueTo);
-    } catch {
-      setBusy(false);
-      setError("Não foi possível iniciar o vínculo agora. Tente novamente.");
-    }
   }
 
   return (
@@ -1294,43 +1252,25 @@ function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Pr
       <div className="auth-card">
         <span className="eyebrow">COMUNICA FARROUPILHA</span>
         <h1>Que bom ter você por aqui.</h1>
-        <p>Entre para acompanhar as propostas e ajudar a construir o próximo recreio.</p>
+        <p>{mode === "signup" ? "Crie sua conta para acompanhar as propostas e participar das decisões." : "Entre para acompanhar as propostas e ajudar a construir o próximo recreio."}</p>
+        <div className="auth-tabs" role="group" aria-label="Acesso à plataforma">
+          <button type="button" className={mode === "login" ? "active" : ""} aria-pressed={mode === "login"} onClick={() => { setMode("login"); setError(""); }}>Entrar</button>
+          <button type="button" className={mode === "signup" ? "active" : ""} aria-pressed={mode === "signup"} onClick={() => { setMode("signup"); setError(""); }}>Criar conta</button>
+        </div>
         <form onSubmit={submit}>
-          <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
-          <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
-          {displayedError && !legacyLinkOpen && <p className="form-error" role="alert">{displayedError}</p>}
+          <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva" autoComplete="username" maxLength={160} required /></label>
+          {mode === "signup" && <label>Turma<input value={turma} onChange={(event) => setTurma(event.target.value)} placeholder="Ex.: 1º ano A" autoComplete="off" maxLength={80} required /></label>}
+          <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 8 : undefined} maxLength={256} required /></label>
+          {mode === "signup" && <small className="auth-password-help">Use pelo menos 8 caracteres.</small>}
+          {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
           <button type="submit" className="primary-button auth-submit" disabled={busy}>
-            {busy ? "Aguarde…" : "Entrar na plataforma"}
-            <Icon name="arrow" size={16} />
+            {busy ? "Aguarde…" : mode === "signup" ? "Criar minha conta" : "Entrar na plataforma"}
+            {mode === "login" && <Icon name="arrow" size={16} />}
           </button>
         </form>
-        <div className="auth-divider"><span>ou</span></div>
-        <button
-          type="button"
-          className="legacy-link-trigger"
-          aria-expanded={legacyLinkOpen}
-          aria-controls="legacy-link-form"
-          onClick={() => { setLegacyLinkRequested(!legacyLinkOpen); clearError(); }}
-        >
-          Já tinha uma conta? Vincular histórico
-        </button>
-        {legacyLinkOpen && (
-          <form id="legacy-link-form" className="legacy-link-form" onSubmit={submitLegacyLink}>
-            <p>Confirme seu usuário e senha antigos. Em seguida, validaremos sua conta escolar do Google para manter suas propostas e apoios.</p>
-            <label>Usuário antigo<input value={legacyUsername} onChange={(event) => setLegacyUsername(event.target.value)} autoComplete="username" required /></label>
-            <label>Senha antiga<input type="password" value={legacyPassword} onChange={(event) => setLegacyPassword(event.target.value)} autoComplete="current-password" required /></label>
-            {displayedError && <p className="form-error" role="alert">{displayedError}</p>}
-            <button type="submit" className="secondary-button" disabled={busy}>
-              {busy ? "Aguarde…" : "Vincular e confirmar com Google"}
-            </button>
-          </form>
-        )}
-        <a className="google-login-button" href="/api/auth/google">
-          <span aria-hidden="true">G</span>Continuar com Google
-        </a>
         <div className="auth-note">
           <Icon name="info" size={16} />
-          <span>Enquanto o acesso Google é configurado, estudantes com conta existente podem entrar com usuário e senha. Novos cadastros continuam dependendo da conta escolar verificada. O acesso do GEF é gerenciado pela equipe responsável.</span>
+          <span>Por enquanto, estudantes podem criar conta com usuário, turma e senha, sem acesso Google. O acesso do GEF continua sendo gerenciado pela equipe responsável.</span>
         </div>
       </div>
     </main>
@@ -1641,6 +1581,23 @@ export function GEFShell() {
       });
       const data = await res.json();
       if (!res.ok) return data.error || "Nome de usuário ou senha incorretos.";
+      await refreshPlatform();
+      setView("proposals");
+      return null;
+    } catch {
+      return "Erro ao conectar com o servidor.";
+    }
+  }
+
+  async function signup(name: string, turma: string, password: string): Promise<string | null> {
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, turma, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error || "Não foi possível criar a conta.";
       await refreshPlatform();
       setView("proposals");
       return null;
@@ -2136,7 +2093,7 @@ export function GEFShell() {
   }
 
   if (!user) {
-    return <AuthView onLogin={login} />;
+    return <AuthView onLogin={login} onSignup={signup} />;
   }
 
   return (
