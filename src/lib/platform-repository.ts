@@ -562,7 +562,7 @@ export async function createActivity(input: {
     await createNotification(tx, {
       dedupeKey: notificationKey("activity", id, "created"),
       title: "Nova atividade na agenda",
-      body: `${input.title} foi adicionada à agenda do recreio.`,
+      body: `${input.title} foi adicionada à agenda da escola.`,
       type: "activity",
       activityId: id,
       proposalId: input.proposalId,

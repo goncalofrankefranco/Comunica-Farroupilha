@@ -13,6 +13,24 @@ test("new proposals use named authorship and avatars are removed", () => {
   assert.match(styles, /\.proposal-card \.save-button,\.context-proposal-meta \.save-button\{display:inline-flex\}/);
 });
 
+test("proposal messaging covers school-wide ideas and keeps recess as an example", () => {
+  const home = readFileSync("src/app/page.tsx", "utf8");
+  assert.match(home, /Uma escola(?:\s|<[^>]+>)*melhor/);
+  assert.match(home, /recreio/i);
+  assert.match(shell, /O que você gostaria de melhorar na escola\?/);
+  assert.match(shell, /Agenda da escola/);
+  assert.match(shell, /Propostas de diferentes áreas/);
+  assert.match(shell, /AVALIAÇÃO DA ATIVIDADE/);
+  assert.match(shell, /Mapa de áreas/);
+});
+
+test("saved-proposal empty state centers its copy and action", () => {
+  assert.match(shell, /className="saved-empty-copy"/);
+  assert.match(styles, /\.saved-empty-copy\{[^}]*text-align:center/);
+  assert.match(styles, /\.saved-empty-copy\{[^}]*max-width/);
+  assert.match(styles, /\.saved-empty \.primary-button\{[^}]*align-self:center[^}]*justify-content:center/);
+});
+
 test("proposal creation navigates to and scrolls the new proposal into view", () => {
   assert.match(shell, /pendingProposalScrollId/);
   assert.match(shell, /scrollIntoView\(/);

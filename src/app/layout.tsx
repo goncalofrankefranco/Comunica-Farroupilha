@@ -4,12 +4,12 @@ import "@fontsource-variable/manrope";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Comunica Farroupilha | O recreio também é seu",
+  title: "Comunica Farroupilha | Ideias para uma escola melhor",
   description:
-    "Uma proposta para aproximar estudantes e GEF: ouvir ideias, pensar o lazer e acompanhar mudanças no recreio do Colégio Farroupilha.",
+    "Um espaço para estudantes e GEF compartilharem propostas sobre aprendizagem, espaços, convivência, atividades e outras áreas da vida escolar.",
   openGraph: {
-    title: "O recreio também é seu. | Comunica Farroupilha",
-    description: "Mais escuta. Mais participação. Um recreio com a nossa cara.",
+    title: "Ideias para uma escola melhor | Comunica Farroupilha",
+    description: "Proponha, acompanhe e construa melhorias em diferentes áreas da vida escolar.",
     locale: "pt_BR",
     type: "website",
   },

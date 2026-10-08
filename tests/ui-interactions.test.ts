@@ -137,10 +137,12 @@ test("landing removes redundant institutional copy", () => {
   assert.match(stylesSource, /\.landing-photo-grid/);
 });
 
-test("landing demo keeps its scenario copy concise", () => {
+test("landing demo represents school-wide proposal areas", () => {
   assert.doesNotMatch(listeningDemoSource, /Como preservar um espaço tranquilo/);
   assert.doesNotMatch(listeningDemoSource, /quem ainda não conhece ninguém/);
-  assert.match(listeningDemoSource, /O que você gostaria de ouvir\? Em quais dias\?/);
+  assert.match(listeningDemoSource, /label: "Aprendizagem"/);
+  assert.match(listeningDemoSource, /label: "Espaços"/);
+  assert.match(listeningDemoSource, /label: "Recreio"/);
 });
 
 test("production login never exposes administrative credentials", () => {

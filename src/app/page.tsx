@@ -3,7 +3,7 @@ import { Arrow } from "@/components/arrow";
 import { ListeningDemo } from "@/components/listening-demo";
 
 const platformSteps = [
-  { number: "01", title: "Propor", text: "Registre o que faria diferença no intervalo." },
+  { number: "01", title: "Propor", text: "Registre uma ideia para qualquer área da vida escolar." },
   { number: "02", title: "Acompanhar", text: "Veja o que está em pauta e acompanhe os próximos passos." },
   { number: "03", title: "Participar", text: "Comente, apoie e ajude a escolher o que vem depois." },
 ];
@@ -29,19 +29,19 @@ export default function Home() {
         <section className="landing-hero" aria-labelledby="hero-title">
           <div className="landing-hero-copy">
             <span className="landing-kicker">COMUNICA FARROUPILHA</span>
-            <h1 id="hero-title">O recreio<br />também é <em>seu.</em></h1>
+            <h1 id="hero-title">Uma escola <em>melhor.</em></h1>
             <p className="landing-hero-lead">Escutar. Propor. Fazer acontecer.</p>
-            <p className="landing-hero-description">Um espaço para transformar experiências do intervalo em próximos passos.</p>
+            <p className="landing-hero-description">Da sala de aula ao recreio, transforme ideias da comunidade em próximos passos.</p>
             <a href="/app" className="landing-button landing-button-orange">Entrar na conversa <Arrow /></a>
             <div className="landing-hero-meta" aria-label="Temas do projeto">
-              <span>arte</span><i aria-hidden="true" /> <span>movimento</span><i aria-hidden="true" /> <span>encontro</span>
+              <span>aprendizagem</span><i aria-hidden="true" /> <span>espaços</span><i aria-hidden="true" /> <span>convivência</span>
             </div>
           </div>
 
           <div className="landing-hero-visual">
             <div className="landing-hero-image-shell">
               <Image className="landing-hero-image" src="/landing/mural-pista.webp" alt="Quadra do Colégio Farroupilha diante de um mural colorido" fill sizes="(max-width: 800px) 92vw, 58vw" priority />
-              <span className="landing-hero-image-label">O recreio em movimento</span>
+              <span className="landing-hero-image-label">A escola em movimento</span>
             </div>
             <div className="landing-hero-sticker" aria-hidden="true"><span>uma escola</span><strong>com a nossa cara.</strong></div>
             <div className="landing-hero-rail"><span>01</span><span>onde tudo começa</span></div>
@@ -55,8 +55,8 @@ export default function Home() {
         <section id="a-ideia" className="landing-story" aria-labelledby="story-title">
           <div className="landing-story-copy">
             <span className="landing-kicker">O PONTO DE PARTIDA</span>
-            <h2 id="story-title">O intervalo tem muitas histórias.</h2>
-            <p>Jogar, conversar, ouvir música ou respirar. Cada pessoa vive o recreio de um jeito.</p>
+            <h2 id="story-title">Toda escola tem espaço para melhorar.</h2>
+            <p>Aprendizagem, espaços e convivência fazem parte da vida escolar. O recreio é só um dos lugares para começar.</p>
             <a className="landing-text-link" href="#plataforma">Entender a ideia <Arrow diagonal /></a>
           </div>
 
@@ -76,7 +76,7 @@ export default function Home() {
           <div className="landing-platform-head">
             <div>
               <span className="landing-kicker">UMA CONVERSA QUE CONTINUA</span>
-              <h2 id="platform-title">Da ideia ao<br /><em>próximo recreio.</em></h2>
+              <h2 id="platform-title">Da ideia ao<br /><em>próximo passo.</em></h2>
             </div>
             <p>Uma plataforma simples para dar visibilidade ao que a comunidade imagina.</p>
           </div>
@@ -84,7 +84,7 @@ export default function Home() {
           <div className="landing-platform-grid">
             <div className="landing-platform-image-shell">
               <Image className="landing-platform-image" src="/landing/corredor-jogos.webp" alt="Corredor coberto do colégio com mesas de pebolim" fill sizes="(max-width: 800px) 92vw, 55vw" />
-              <span className="landing-platform-image-note">O que pode acontecer<br /><strong>no intervalo?</strong></span>
+              <span className="landing-platform-image-note">O que podemos<br /><strong>melhorar juntos?</strong></span>
             </div>
             <div className="landing-platform-copy">
               {platformSteps.map((step) => (
@@ -100,7 +100,7 @@ export default function Home() {
 
         <section id="experimente" className="landing-demo-section" aria-labelledby="demo-title">
           <div className="landing-demo-head">
-            <div><span className="landing-kicker">EXPERIMENTE</span><h2 id="demo-title">E se o recreio tivesse…</h2></div>
+            <div><span className="landing-kicker">EXPERIMENTE</span><h2 id="demo-title">E se a escola tivesse…</h2></div>
             <p>Escolha um cenário e veja a conversa começar.</p>
           </div>
           <ListeningDemo />
@@ -120,7 +120,7 @@ export default function Home() {
 
       <footer className="landing-footer">
         <div className="landing-footer-inner">
-          <div className="landing-footer-brand"><strong>comunica farroupilha</strong><span>Um recreio com a nossa cara.</span></div>
+          <div className="landing-footer-brand"><strong>comunica farroupilha</strong><span>Ideias para uma escola melhor.</span></div>
           <div className="landing-footer-marks"><Image src="/brand/gef.png" width={48} height={48} alt="GEF — Grêmio Estudantil Farroupilha" /><a href="https://colegiofarroupilha.poa.br/" target="_blank" rel="noopener noreferrer" aria-label="Site do Colégio Farroupilha (abre em nova aba)"><Image src="/brand/farroupilha.png" width={64} height={44} alt="Colégio Farroupilha" /></a></div>
           <a className="landing-back-top" href="#inicio">Voltar ao início <Arrow diagonal /></a>
         </div>

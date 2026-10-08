@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Arrow } from "./arrow";
 
 const ideas = [
-  { id: "music", label: "Música", title: "Uma trilha para o intervalo?", origin: "Uma ideia do GEF", question: "E se a gente experimentasse música em alguns recreios?", feedback: "O que você gostaria de ouvir? Em quais dias?", next: "Ouvir, testar e perguntar depois como foi." },
-  { id: "games", label: "Jogos e movimento", title: "Cabe uma partida no recreio?", origin: "Uma ideia dos alunos", question: "Que tal ter jogos para juntar a turma no intervalo?", feedback: "Quais jogos cabem no tempo e no espaço do recreio?", next: "Combinar o teste, abrir para mais gente e avaliar juntos." },
-  { id: "quiet", label: "Uma pausa", title: "Também vale desacelerar.", origin: "Uma experiência compartilhada", question: "E se eu só quiser um lugar tranquilo para conversar ou descansar?", feedback: "O que torna uma pausa mais confortável?", next: "Considerar também quem prefere desacelerar." },
+  { id: "learning", label: "Aprendizagem", title: "Mais espaço para estudar?", origin: "Uma ideia de estudante", question: "E se houvesse um lugar tranquilo para estudar ou tirar dúvidas entre as aulas?", feedback: "Em quais horários esse espaço faria diferença?", next: "Ouvir as turmas, testar o formato e avaliar juntos." },
+  { id: "spaces", label: "Espaços", title: "Um pátio melhor para todos?", origin: "Uma ideia da comunidade", question: "Como os espaços comuns poderiam ser mais acolhedores e acessíveis?", feedback: "Qual mudança seria mais útil no dia a dia?", next: "Mapear prioridades e combinar um próximo passo viável." },
+  { id: "recess", label: "Recreio", title: "Mais opções para o recreio?", origin: "Um exemplo de proposta", question: "Que tal ter jogos para juntar a turma no intervalo?", feedback: "Quais jogos cabem no tempo e no espaço disponíveis?", next: "Testar uma opção no recreio e perguntar depois como foi." },
 ];
 
 export function ListeningDemo() {

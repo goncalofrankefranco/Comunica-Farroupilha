@@ -19,6 +19,7 @@ import {
 import { previewLegacyState, sanitizeLegacyImport } from "@/lib/legacy-import";
 import { ELECTIONS_ENABLED } from "@/lib/feature-flags";
 import { getAuthErrorMessage } from "@/lib/auth-errors";
+import { getProposalThemeFilters, OTHER_PROPOSAL_THEME, PROPOSAL_THEME_CHOICES, resolveProposalTheme } from "@/lib/proposal-themes";
 import {
   canCancelProposal,
   filterNotifications,
@@ -179,7 +180,6 @@ type DemoState = {
   chapaQuestions: ChapaQuestion[];
 };
 
-const THEMES = ["Esportes", "Jogos de mesa", "Música e cultura", "Convivência", "Descanso", "Outros"];
 const CHAPA_AREAS = ["Esportes e movimento", "Cultura e música", "Convivência e descanso", "Participação"];
 
 const STATUS: Record<ProposalStatus, { label: string; color: string; step: number }> = {
@@ -825,12 +825,14 @@ function ProposalPreview({
 function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => void; onCreate: (proposal: { title: string; body: string; theme: string }) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [theme, setTheme] = useState(THEMES[0]);
+  const [theme, setTheme] = useState<string>(PROPOSAL_THEME_CHOICES[0]);
+  const [customTheme, setCustomTheme] = useState("");
+  const resolvedTheme = resolveProposalTheme(theme, customTheme);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (title.trim().length < 5 || body.trim().length < 20) return;
-    onCreate({ title: title.trim(), body: body.trim(), theme });
+    if (title.trim().length < 5 || body.trim().length < 20 || !resolvedTheme) return;
+    onCreate({ title: title.trim(), body: body.trim(), theme: resolvedTheme });
   }
 
   const isGef = user.role === "gef";
@@ -840,28 +842,29 @@ function Composer({ user, onCancel, onCreate }: { user: User; onCancel: () => vo
       <div className="composer-panel-head">
         <div>
           <span className="eyebrow">{isGef ? "CONSULTA À COMUNIDADE (GEF)" : "NOVA PROPOSTA"}</span>
-          <h2>{isGef ? "Qual ideia você gostaria de consultar com os alunos?" : "O que você gostaria de mudar no recreio?"}</h2>
-          <p>{isGef ? "Publique uma ideia ou teste de lazer para ouvir a comunidade escolar." : "Conte a experiência e sugira um próximo passo para a comunidade."}</p>
+          <h2>{isGef ? "Qual aspecto da escola você quer colocar em pauta?" : "O que você gostaria de melhorar na escola?"}</h2>
+          <p>Compartilhe uma ideia sobre qualquer área da vida escolar. O recreio é só um dos exemplos.</p>
         </div>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="Fechar criação"><Icon name="close" size={20} /></button>
       </div>
-      <label>Título<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Mais jogos para jogar em grupo" maxLength={120} /></label>
-      <label>Sua proposta<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="O que acontece hoje? Qual mudança você gostaria de experimentar?" rows={6} maxLength={3000} /></label>
+      <label>Título<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Mais apoio para estudar entre as aulas" maxLength={120} /></label>
+      <label>Sua proposta<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="O que acontece hoje e que mudança ajudaria? Ex.: criar um espaço tranquilo no recreio." rows={6} maxLength={3000} /></label>
       <div className="form-row">
         <div className="form-field">
-          <span className="form-field-label">Tema</span>
+          <span className="form-field-label">Área da escola</span>
           <SelectMenu
             value={theme}
             onChange={setTheme}
-            options={THEMES.map((item) => ({ value: item, label: item }))}
-            ariaLabel="Tema da proposta"
+            options={PROPOSAL_THEME_CHOICES.map((item) => ({ value: item, label: item }))}
+            ariaLabel="Área da proposta"
             className="select-menu-field"
           />
         </div>
         {isGef && <label>Autoria<input value="Grêmio Estudantil Farroupilha" disabled /></label>}
       </div>
+      {theme === OTHER_PROPOSAL_THEME && <label>Especifique o assunto<input value={customTheme} onChange={(event) => setCustomTheme(event.target.value)} placeholder="Ex.: transporte escolar" maxLength={80} required /></label>}
       <div className="composer-help">
-        <Icon name="info" size={16} /> {isGef ? "Essa proposta será identificada como uma consulta oficial do GEF." : "A proposta será publicada com o nome da sua conta."}
+        <Icon name="info" size={16} /> {isGef ? "Essa consulta oficial do GEF ficará visível para a comunidade escolar." : "A proposta será publicada com o nome da sua conta."}
       </div>
       <div className="composer-actions">
         <button type="button" className="secondary-button" onClick={onCancel}>Cancelar</button>
@@ -915,7 +918,7 @@ function ActivityFeedbackModal({
       <div className="feedback-modal-card">
         <div className="feedback-modal-head">
           <div>
-            <span className="eyebrow">AVALIAÇÃO PÓS-RECREIO</span>
+            <span className="eyebrow">AVALIAÇÃO DA ATIVIDADE</span>
             <h3 id="feedback-title">{activity.title}</h3>
             <p>{activity.date} · {activity.place}</p>
           </div>
@@ -924,7 +927,7 @@ function ActivityFeedbackModal({
 
         <form onSubmit={handleSend}>
           <div className="feedback-question">
-            <label className="question-title">Você participou desta atividade no intervalo?</label>
+            <label className="question-title">Você participou desta atividade?</label>
             <div className="participated-toggle">
               <button type="button" className={participated ? "active" : ""} onClick={() => setParticipated(true)}>Sim, participei</button>
               <button type="button" className={!participated ? "active" : ""} onClick={() => setParticipated(false)}>Não participei</button>
@@ -956,7 +959,7 @@ function ActivityFeedbackModal({
 
           <div className="feedback-question">
             <label className="question-title">Comentários ou sugestões para o GEF (opcional)</label>
-            <textarea placeholder="O que funcionou bem? O que podemos adaptar para o próximo recreio?" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={500} />
+            <textarea placeholder="O que funcionou bem? O que podemos adaptar para uma próxima atividade?" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={500} />
           </div>
 
           <div className="composer-actions">
@@ -1065,15 +1068,24 @@ function ActivitySummaryModal({
 }
 
 function GraphMap({ proposals, onSelect }: { proposals: Proposal[]; onSelect: (id: string) => void }) {
-  const positions: Record<string, { x: number; y: number }> = { "Esportes": { x: 18, y: 27 }, "Jogos de mesa": { x: 82, y: 25 }, "Música e cultura": { x: 15, y: 79 }, "Convivência": { x: 50, y: 18 }, "Descanso": { x: 86, y: 79 }, "Outros": { x: 51, y: 79 } };
-  const groups = THEMES.map((theme) => ({ theme, proposals: proposals.filter((proposal) => proposal.theme === theme) })).filter((group) => group.proposals.length);
-  const points = proposals.map((proposal) => {
-    const center = positions[proposal.theme] ?? { x: 50, y: 50 };
-    const siblings = proposals.filter((item) => item.theme === proposal.theme);
-    const localIndex = siblings.findIndex((item) => item.id === proposal.id);
-    const spread = siblings.length > 1 ? (localIndex - (siblings.length - 1) / 2) * 9 : 0;
-    const vertical = siblings.length > 1 ? (localIndex % 2 ? 13 : -13) : -15;
-    return { proposal, x: Math.min(93, Math.max(7, center.x + spread)), y: Math.min(92, Math.max(8, center.y + vertical)) };
+  const groupedProposals = new Map<string, Proposal[]>();
+  for (const proposal of proposals) {
+    const group = groupedProposals.get(proposal.theme) ?? [];
+    group.push(proposal);
+    groupedProposals.set(proposal.theme, group);
+  }
+  const groups = [...groupedProposals].map(([theme, proposals]) => ({ theme, proposals }));
+  const positions = Object.fromEntries(groups.map(({ theme }, index) => {
+    const angle = (index / groups.length) * Math.PI * 2 - Math.PI / 2;
+    return [theme, { x: 50 + 34 * Math.cos(angle), y: 50 + 34 * Math.sin(angle) }];
+  })) as Record<string, { x: number; y: number }>;
+  const points = groups.flatMap((group) => {
+    const center = positions[group.theme] ?? { x: 50, y: 50 };
+    return group.proposals.map((proposal, localIndex) => {
+      const spread = group.proposals.length > 1 ? (localIndex - (group.proposals.length - 1) / 2) * 9 : 0;
+      const vertical = group.proposals.length > 1 ? (localIndex % 2 ? 13 : -13) : -15;
+      return { proposal, x: Math.min(93, Math.max(7, center.x + spread)), y: Math.min(92, Math.max(8, center.y + vertical)) };
+    });
   });
 
   return (
@@ -1183,7 +1195,7 @@ function ActivityComposer({ proposals, initialProposalId, onCancel, onCreate }: 
   const list = proposals.filter((proposal) => proposal.status === "development" || proposal.status === "analysis");
   const initialProposal = list.find((proposal) => proposal.id === initialProposalId) ?? list[0];
   const [proposalId, setProposalId] = useState(initialProposal?.id ?? "");
-  const [title, setTitle] = useState(initialProposal?.title ?? "Atividade no recreio");
+  const [title, setTitle] = useState(initialProposal?.title ?? "Atividade escolar");
   const [date, setDate] = useState(localDateKey(new Date()));
   const [time, setTime] = useState("10:15–10:35");
   const [place, setPlace] = useState("Pátio central");
@@ -1265,7 +1277,7 @@ function AuthView({ onLogin }: { onLogin: (name: string, password: string) => Pr
       <div className="auth-card">
         <span className="eyebrow">COMUNICA FARROUPILHA</span>
         <h1>Que bom ter você por aqui.</h1>
-        <p>Entre para acompanhar as propostas e ajudar a construir o próximo recreio.</p>
+        <p>Entre para acompanhar propostas e ajudar a construir uma escola melhor.</p>
         <form onSubmit={submit}>
           <label>Nome de usuário<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: ana.silva ou administrador" autoComplete="username" required /></label>
           <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
@@ -1537,6 +1549,10 @@ export function GEFShell() {
       })
       .sort((a, b) => sort === "supports" ? b.supports - a.supports : state.proposals.indexOf(a) - state.proposals.indexOf(b));
   }, [state.proposals, query, themeFilter, statusFilter, sort]);
+  const proposalThemeFilters = useMemo(
+    () => getProposalThemeFilters(state.proposals.map((proposal) => proposal.theme)),
+    [state.proposals],
+  );
 
   const userSupportedIds = useMemo(() => {
     if (!user) return [];
@@ -2155,7 +2171,7 @@ export function GEFShell() {
                 <div>
                   <span className="eyebrow">ESPAÇO DE PARTICIPAÇÃO</span>
                   <h1>Olá, {user.name}! <Icon name="spark" size={18} /></h1>
-                  <p>Participe, proponha e construa uma escola cada vez melhor.</p>
+                  <p>Propostas de diferentes áreas ajudam a construir uma escola cada vez melhor.</p>
                 </div>
                 <div className="welcome-shape">
                   <Image className="welcome-logo" src="/brand/gremio-comunica.webp" alt="Logo Comunica Farroupilha" width={180} height={120} priority />
@@ -2166,7 +2182,7 @@ export function GEFShell() {
               <section className="content-heading">
                 <div>
                   <h2>Propostas da comunidade</h2>
-                  <p>Veja, apoie e comente ideias criadas por estudantes e consultas abertas pelo GEF.</p>
+                  <p>Propostas de diferentes áreas da vida escolar, criadas por estudantes e pelo GEF.</p>
                 </div>
                 <button className="primary-button heading-action tactile-control" onClick={openComposer}>
                   <Icon name="plus" size={17} />{isGef ? "Criar consulta" : "Criar proposta"}
@@ -2180,12 +2196,12 @@ export function GEFShell() {
                 </div>
                 <label className="select-filter">
                   <Icon name="grid" size={16} />
-                  <span className="filter-label">Tema:</span>
+                  <span className="filter-label">Área:</span>
                   <SelectMenu
                     value={themeFilter}
                     onChange={setThemeFilter}
-                    options={["Todos", ...THEMES].map((item) => ({ value: item, label: item }))}
-                    ariaLabel="Filtrar propostas por tema"
+                    options={["Todos", ...proposalThemeFilters].map((item) => ({ value: item, label: item }))}
+                    ariaLabel="Filtrar propostas por área da escola"
                     className="select-menu-inline"
                   />
                 </label>
@@ -2268,9 +2284,11 @@ export function GEFShell() {
               </div>
               {savedProposals.length === 0 ? (
                 <div className="empty-state saved-empty">
-                  <Icon name="bookmark" size={26} />
-                  <h3>Nenhuma proposta acompanhada</h3>
-                  <p>Toque no marcador de uma proposta para guardá-la aqui.</p>
+                  <div className="saved-empty-copy">
+                    <Icon name="bookmark" size={26} />
+                    <h3>Nenhuma proposta acompanhada</h3>
+                    <p>Toque no marcador de uma proposta para guardá-la aqui.</p>
+                  </div>
                   <button type="button" className="primary-button" onClick={exploreProposals}>
                     Explorar propostas <Icon name="arrow" size={15} />
                   </button>
@@ -2319,8 +2337,8 @@ export function GEFShell() {
               <div className="content-heading">
                 <div>
                   <span className="eyebrow">PARTICIPAÇÃO EM AÇÃO</span>
-                  <h2>Agenda do recreio</h2>
-                  <p>Atividades confirmadas, horários, locais e espaço de avaliação pós-recreio.</p>
+                  <h2>Agenda da escola</h2>
+                  <p>Atividades e iniciativas confirmadas, com horários, locais e espaço para avaliação.</p>
                 </div>
                 {isGef && (
                   <button className="primary-button heading-action" onClick={() => { setActivityProposalId(""); setActivityOpen(true); }}>
@@ -2602,11 +2620,11 @@ export function GEFShell() {
                 <aside className="gef-theme-panel" aria-labelledby="gef-theme-title">
                   <div className="gef-section-heading">
                     <div>
-                      <h3 id="gef-theme-title">Temas das propostas</h3>
-                      <p>Distribuição por tema.</p>
+                      <h3 id="gef-theme-title">Áreas das propostas</h3>
+                      <p>Distribuição por área da vida escolar.</p>
                     </div>
                   </div>
-                  {gefThemeCounts.length === 0 ? <p className="gef-queue-empty">Os temas aparecerão quando houver propostas.</p> : <div className="gef-theme-bars">
+                  {gefThemeCounts.length === 0 ? <p className="gef-queue-empty">As áreas aparecerão quando houver propostas.</p> : <div className="gef-theme-bars">
                     {gefThemeCounts.map(({ theme, count }) => <div className="gef-theme-row" key={theme}>
                       <span>{theme}</span>
                       <span className="gef-theme-track" role="meter" aria-label={`${theme}: ${count} propostas`} aria-valuemin={0} aria-valuemax={Math.max(...gefThemeCounts.map((item) => item.count))} aria-valuenow={count}>
@@ -2623,8 +2641,8 @@ export function GEFShell() {
                 <summary>Explorar mapa temático</summary>
                 <div className="map-heading">
                   <div>
-                    <h3>Mapa de temas</h3>
-                    <p>O tamanho mostra a quantidade de propostas; a cor mostra a situação.</p>
+                    <h3>Mapa de áreas</h3>
+                    <p>As áreas mostram onde estão as ideias; a cor indica a situação de cada proposta.</p>
                   </div>
                   <div className="map-legend">
                     <span><i className="legend-dot received" />Recebida</span>

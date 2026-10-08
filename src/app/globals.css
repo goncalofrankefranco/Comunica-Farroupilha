@@ -670,3 +670,7 @@ h1 span{color:var(--orange-dark)}
 @media(prefers-reduced-motion:reduce){
   .notification-item,.proposal-author-actions button{transition:none}
 }
+
+.saved-empty{text-align:center}
+.saved-empty-copy{display:flex;max-width:42ch;flex-direction:column;align-items:center;text-align:center}
+.saved-empty-copy p{margin-bottom:14px}
